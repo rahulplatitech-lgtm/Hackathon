@@ -691,7 +691,7 @@ export default function Command() {
                 defaultCenter={defaultCenter}
                 center={mapCenter || defaultCenter}
                 defaultZoom={13} 
-                mapId="crisis-map"
+                mapId={import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? "crisis-map" : undefined}
                 className="w-full h-full"
                 disableDefaultUI={true}
               >

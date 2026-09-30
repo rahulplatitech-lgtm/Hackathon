@@ -35,6 +35,29 @@
   background: #0b0f17 !important; 
 }
 
+/* =========================================================================
+   Google Maps API Dialog & Watermark Cleanup
+   Suppresses "This page can't load Google Maps correctly" modal & warning overlays
+   when operating with demo keys or local development coordinates.
+   ========================================================================= */
+.gm-err-container,
+.gm-err-content,
+.gm-err-message,
+.gm-err-autocomplete,
+div[style*="z-index: 10000002"],
+div[style*="z-index: 10000001"],
+div[style*="z-index: 1000001"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Hide the 'For development purposes only' dark overlay grid */
+.gm-style-moc {
+  display: none !important;
+}
+
 /* Subtle, Calm Background Pattern */
 .bg-subtle-grid {
   background-size: 32px 32px;
