@@ -5,12 +5,14 @@ Enforces:
 2. Strategic fleet reserve buffers (always maintain backup capacity for unexpected crises).
 3. Priority-weighted preemption (high severity incidents get units first).
 """
+
 from ortools.sat.python import cp_model
 from typing import List, Dict, Any, Tuple
 import math
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class ResourceAllocator:
     RESOURCE_TYPE_COMPATIBILITY = {
@@ -72,7 +74,9 @@ class ResourceAllocator:
 
             # Cap each resource type to what is actually requested
             for rtype, max_count in type_counts.items():
-                res_of_type = [j for j in range(n_res) if candidates[j].get("type", "") == rtype]
+                res_of_type = [
+                    j for j in range(n_res) if candidates[j].get("type", "") == rtype
+                ]
                 if res_of_type:
                     model.Add(sum(assign[(i, j)] for j in res_of_type) <= max_count)
 
@@ -88,9 +92,11 @@ class ResourceAllocator:
         # Constraint 4: Fleet Reserve Buffer (Keep Backup Capacity)
         # Always maintain at least 1-2 units in reserve for critical types if fleet permits
         has_critical_incidents = any(int(inc.get("severity", 0)) >= 5 for inc in active)
-        
+
         for rtype in ["AMBULANCE", "RESCUE_TEAM", "POLICE_UNIT"]:
-            res_indices = [j for j in range(n_res) if candidates[j].get("type", "") == rtype]
+            res_indices = [
+                j for j in range(n_res) if candidates[j].get("type", "") == rtype
+            ]
             count_res = len(res_indices)
             if count_res >= 2:
                 # Keep at least 1 unit on reserve standby, or 2 if fleet >= 4
@@ -99,7 +105,10 @@ class ResourceAllocator:
                 if has_critical_incidents:
                     reserve_min = 1
                 max_deployable = max(1, count_res - reserve_min)
-                model.Add(sum(assign[(i, j)] for i in range(n_inc) for j in res_indices) <= max_deployable)
+                model.Add(
+                    sum(assign[(i, j)] for i in range(n_inc) for j in res_indices)
+                    <= max_deployable
+                )
 
         # Objective: Maximize priority coverage (quadratic weight), minimize travel distance
         # Base dispatch reward ensures dispatching a compatible vehicle to ANY active emergency
@@ -114,19 +123,25 @@ class ResourceAllocator:
             sev = int(inc.get("severity", 3))
             raw_priority = inc.get("priority_score")
             # If priority_score is not set yet, provide robust default from severity
-            priority = float(raw_priority if raw_priority is not None and raw_priority > 0 else (sev * 18.0 + 10.0))
+            priority = float(
+                raw_priority
+                if raw_priority is not None and raw_priority > 0
+                else (sev * 18.0 + 10.0)
+            )
 
             # Quadratic priority weight: Severity 5 gets exponentially higher priority than S3
             # S5 (priority 90-100) -> 8100-10000 weight
             # S4 (priority 70-80)  -> 4900-6400 weight
             # S3 (priority 30-40)  -> 900-1600 weight
-            priority_weight = int((priority ** 2) * 5)
+            priority_weight = int((priority**2) * 5)
 
             for j in range(n_res):
                 res = candidates[j]
                 dist = self._haversine(
-                    inc.get("latitude", 0), inc.get("longitude", 0),
-                    res.get("latitude", 0), res.get("longitude", 0),
+                    inc.get("latitude", 0),
+                    inc.get("longitude", 0),
+                    res.get("latitude", 0),
+                    res.get("longitude", 0),
                 )
                 distances[(i, j)] = dist
                 dist_cost = int(dist * DISTANCE_SCALE)
@@ -151,15 +166,17 @@ class ResourceAllocator:
                     if solver.BooleanValue(assign[(i, j)]):
                         dist = distances[(i, j)]
                         eta = max(dist / 40.0 * 60, 1.0)  # 40 km/h average speed
-                        allocations.append({
-                            "incident_id": active[i]["id"],
-                            "resource_id": candidates[j]["id"],
-                            "resource_name": candidates[j].get("name", ""),
-                            "resource_type": candidates[j].get("type", ""),
-                            "distance_km": round(dist, 2),
-                            "eta_minutes": round(eta, 1),
-                            "status": "ASSIGNED",
-                        })
+                        allocations.append(
+                            {
+                                "incident_id": active[i]["id"],
+                                "resource_id": candidates[j]["id"],
+                                "resource_name": candidates[j].get("name", ""),
+                                "resource_type": candidates[j].get("type", ""),
+                                "distance_km": round(dist, 2),
+                                "eta_minutes": round(eta, 1),
+                                "status": "ASSIGNED",
+                            }
+                        )
                         assigned_resources.add(candidates[j]["id"])
 
             # Compute transparent AI Decision Rationale for each allocation
@@ -193,10 +210,23 @@ class ResourceAllocator:
                         reason = f"Equipment Mismatch: Unit provides {res_type.replace('_', ' ').title()}, but {inc_type} specifically requires {', '.join([t.replace('_', ' ').title() for t in needed_types])}."
                         status_tag = "CAPABILITY_MISMATCH"
                     elif res["id"] in assigned_resources:
-                        other_inc_id = next((a["incident_id"] for a in allocations if a["resource_id"] == res["id"]), None)
-                        other_inc = next((x for x in active if x["id"] == other_inc_id), None)
+                        other_inc_id = next(
+                            (
+                                a["incident_id"]
+                                for a in allocations
+                                if a["resource_id"] == res["id"]
+                            ),
+                            None,
+                        )
+                        other_inc = next(
+                            (x for x in active if x["id"] == other_inc_id), None
+                        )
                         other_sev = other_inc.get("severity", 3) if other_inc else 3
-                        other_type = other_inc.get("type", "Critical Incident") if other_inc else "Critical Incident"
+                        other_type = (
+                            other_inc.get("type", "Critical Incident")
+                            if other_inc
+                            else "Critical Incident"
+                        )
                         reason = f"Preempted by Priority: Assigned to {other_type} (#{other_inc_id}, S{other_sev}) where immediate life risk was prioritized."
                         status_tag = "ASSIGNED_ELSEWHERE"
                     elif "reserve" in res.get("name", "").lower():
@@ -208,15 +238,17 @@ class ResourceAllocator:
                         reason = f"Distance Penalty: Located {dist} km away ({diff_km:+} km / {diff_eta:+}m slower road travel time compared to chosen unit)."
                         status_tag = "DISTANCE_PENALTY"
 
-                    alternatives_considered.append({
-                        "resource_id": res["id"],
-                        "resource_name": res.get("name", ""),
-                        "resource_type": res_type,
-                        "distance_km": dist,
-                        "eta_minutes": eta,
-                        "status_tag": status_tag,
-                        "reason": reason,
-                    })
+                    alternatives_considered.append(
+                        {
+                            "resource_id": res["id"],
+                            "resource_name": res.get("name", ""),
+                            "resource_type": res_type,
+                            "distance_km": dist,
+                            "eta_minutes": eta,
+                            "status_tag": status_tag,
+                            "reason": reason,
+                        }
+                    )
 
                 alloc["decision_rationale"] = {
                     "why_chosen": why_chosen,
@@ -227,20 +259,30 @@ class ResourceAllocator:
         unmet = []
         for inc in active:
             needed = inc.get("required_resources", [])
-            assigned_types = [a["resource_type"] for a in allocations if a["incident_id"] == inc["id"]]
+            assigned_types = [
+                a["resource_type"] for a in allocations if a["incident_id"] == inc["id"]
+            ]
             for rtype in set(needed):
                 needed_count = needed.count(rtype)
                 assigned_count = assigned_types.count(rtype)
                 if assigned_count < needed_count:
-                    unmet.append({
-                        "incident_id": inc["id"],
-                        "incident_type": inc.get("type", ""),
-                        "resource_type": rtype,
-                        "count_needed": needed_count - assigned_count,
-                    })
+                    unmet.append(
+                        {
+                            "incident_id": inc["id"],
+                            "incident_type": inc.get("type", ""),
+                            "resource_type": rtype,
+                            "count_needed": needed_count - assigned_count,
+                        }
+                    )
 
-        score = solver.ObjectiveValue() if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else 0
-        logger.info(f"Allocation completed: {len(allocations)} assigned out of {n_res} candidates. {len(unmet)} unmet.")
+        score = (
+            solver.ObjectiveValue()
+            if status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+            else 0
+        )
+        logger.info(
+            f"Allocation completed: {len(allocations)} assigned out of {n_res} candidates. {len(unmet)} unmet."
+        )
 
         return {
             "allocations": allocations,
@@ -253,5 +295,10 @@ class ResourceAllocator:
         R = 6371.0
         dlat = math.radians(lat2 - lat1)
         dlon = math.radians(lon2 - lon1)
-        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(math.radians(lat1))
+            * math.cos(math.radians(lat2))
+            * math.sin(dlon / 2) ** 2
+        )
         return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))

@@ -69,13 +69,15 @@ class SeverityPredictor:
 
         if HAS_XGBOOST:
             try:
+                # XGBoost requires 0-indexed classes [0, 1, 2, 3, 4] for 5 classes
+                y_xgb = y - 1
                 self.xgb_model = XGBClassifier(
                     n_estimators=100, max_depth=5, learning_rate=0.1,
-                    objective="multi:softmax", num_class=6,
-                    use_label_encoder=False, eval_metric="mlogloss",
+                    objective="multi:softmax", num_class=5,
+                    eval_metric="mlogloss",
                     verbosity=0,
                 )
-                self.xgb_model.fit(X, y)
+                self.xgb_model.fit(X, y_xgb)
                 logger.info("XGBoost model trained successfully")
             except Exception as e:
                 logger.warning(f"XGBoost training failed: {e}")
@@ -99,7 +101,8 @@ class SeverityPredictor:
 
         if self.xgb_model:
             try:
-                xgb_pred = int(self.xgb_model.predict(features.reshape(1, -1))[0])
+                # Map 0-indexed prediction [0..4] back to [1..5]
+                xgb_pred = int(self.xgb_model.predict(features.reshape(1, -1))[0]) + 1
                 predictions.append(("xgboost", xgb_pred))
             except Exception:
                 pass
