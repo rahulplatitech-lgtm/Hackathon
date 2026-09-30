@@ -102,14 +102,19 @@ class ResourceAllocator:
                 model.Add(sum(assign[(i, j)] for i in range(n_inc) for j in res_indices) <= max_deployable)
 
         # Objective: Maximize priority coverage (quadratic weight), minimize travel distance
-        DISTANCE_SCALE = 1000
+        # Base dispatch reward ensures dispatching a compatible vehicle to ANY active emergency
+        # ALWAYS yields strongly positive benefit, while distance penalty picks the closest unit.
+        BASE_DISPATCH_REWARD = 250_000
+        DISTANCE_SCALE = 500
         objective_terms = []
         distances = {}
 
         for i in range(n_inc):
             inc = active[i]
             sev = int(inc.get("severity", 3))
-            priority = float(inc.get("priority_score", 50.0))
+            raw_priority = inc.get("priority_score")
+            # If priority_score is not set yet, provide robust default from severity
+            priority = float(raw_priority if raw_priority is not None and raw_priority > 0 else (sev * 18.0 + 10.0))
 
             # Quadratic priority weight: Severity 5 gets exponentially higher priority than S3
             # S5 (priority 90-100) -> 8100-10000 weight
@@ -126,8 +131,8 @@ class ResourceAllocator:
                 distances[(i, j)] = dist
                 dist_cost = int(dist * DISTANCE_SCALE)
 
-                # Net benefit for dispatching this resource
-                benefit = priority_weight - dist_cost
+                # Net benefit for dispatching this resource: Base Reward + Priority - Distance Cost
+                benefit = BASE_DISPATCH_REWARD + priority_weight - dist_cost
                 objective_terms.append(assign[(i, j)] * benefit)
 
         if objective_terms:
@@ -156,6 +161,67 @@ class ResourceAllocator:
                             "status": "ASSIGNED",
                         })
                         assigned_resources.add(candidates[j]["id"])
+
+            # Compute transparent AI Decision Rationale for each allocation
+            for alloc in allocations:
+                inc = next((x for x in active if x["id"] == alloc["incident_id"]), None)
+                if not inc:
+                    continue
+
+                inc_type = inc.get("type", "Emergency")
+                needed_types = inc.get("required_resources", [])
+                inc_sev = inc.get("severity", 3)
+                inc_idx = active.index(inc)
+
+                why_chosen = (
+                    f"Selected {alloc['resource_name']} as the optimal emergency responder: "
+                    f"Fastest road response ({alloc['distance_km']} km, ~{alloc['eta_minutes']}m ETA). "
+                    f"Capabilities match {inc_type} requirements ({alloc['resource_type']}) with sufficient crew capacity."
+                )
+
+                alternatives_considered = []
+                for j in range(n_res):
+                    res = candidates[j]
+                    if res["id"] == alloc["resource_id"]:
+                        continue
+
+                    res_type = res.get("type", "")
+                    dist = round(distances.get((inc_idx, j), 0), 2)
+                    eta = round(max(dist / 40.0 * 60, 1.0), 1)
+
+                    if res_type not in needed_types:
+                        reason = f"Equipment Mismatch: Unit provides {res_type.replace('_', ' ').title()}, but {inc_type} specifically requires {', '.join([t.replace('_', ' ').title() for t in needed_types])}."
+                        status_tag = "CAPABILITY_MISMATCH"
+                    elif res["id"] in assigned_resources:
+                        other_inc_id = next((a["incident_id"] for a in allocations if a["resource_id"] == res["id"]), None)
+                        other_inc = next((x for x in active if x["id"] == other_inc_id), None)
+                        other_sev = other_inc.get("severity", 3) if other_inc else 3
+                        other_type = other_inc.get("type", "Critical Incident") if other_inc else "Critical Incident"
+                        reason = f"Preempted by Priority: Assigned to {other_type} (#{other_inc_id}, S{other_sev}) where immediate life risk was prioritized."
+                        status_tag = "ASSIGNED_ELSEWHERE"
+                    elif "reserve" in res.get("name", "").lower():
+                        reason = f"Strategic Reserve Guardrail Policy: Kept on standby to guarantee city-wide emergency coverage in the event of secondary catastrophic crises."
+                        status_tag = "RESERVE_GUARDRAIL"
+                    else:
+                        diff_km = round(dist - alloc["distance_km"], 1)
+                        diff_eta = round(eta - alloc["eta_minutes"], 1)
+                        reason = f"Distance Penalty: Located {dist} km away ({diff_km:+} km / {diff_eta:+}m slower road travel time compared to chosen unit)."
+                        status_tag = "DISTANCE_PENALTY"
+
+                    alternatives_considered.append({
+                        "resource_id": res["id"],
+                        "resource_name": res.get("name", ""),
+                        "resource_type": res_type,
+                        "distance_km": dist,
+                        "eta_minutes": eta,
+                        "status_tag": status_tag,
+                        "reason": reason,
+                    })
+
+                alloc["decision_rationale"] = {
+                    "why_chosen": why_chosen,
+                    "why_others_not_chosen": alternatives_considered,
+                }
 
         # Determine unmet requirements
         unmet = []

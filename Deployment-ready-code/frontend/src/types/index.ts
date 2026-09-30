@@ -13,11 +13,28 @@ export interface IncidentReport {
   status: string; created_at: string;
 }
 
+export interface AlternativeCandidate {
+  resource_id: string;
+  resource_name: string;
+  resource_type: string;
+  distance_km: number;
+  eta_minutes: number;
+  status_tag: 'CAPABILITY_MISMATCH' | 'ASSIGNED_ELSEWHERE' | 'RESERVE_GUARDRAIL' | 'DISTANCE_PENALTY';
+  reason: string;
+}
+
+export interface DecisionRationale {
+  why_chosen: string;
+  why_others_not_chosen: AlternativeCandidate[];
+}
+
 export interface Allocation {
   id: string; incident_id: string; resource_id: string;
   resource_name?: string; resource_type?: string;
   eta_minutes: number; distance_km: number;
   status: string; plan_id?: string;
+  route_geometry?: Array<[number, number]>;
+  decision_rationale?: DecisionRationale;
 }
 
 export interface Incident {

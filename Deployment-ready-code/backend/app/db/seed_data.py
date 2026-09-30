@@ -51,11 +51,13 @@ SEED_RESOURCES = [
     {"id": "A3", "name": "Ambulance Alpha-3", "type": "AMBULANCE", "latitude": 12.9850, "longitude": 77.6100, "capacity": 2, "capabilities": ["BLS", "ALS"], "status": "AVAILABLE"},
     {"id": "A4", "name": "Ambulance Alpha-4 (Reserve)", "type": "AMBULANCE", "latitude": 12.9600, "longitude": 77.5950, "capacity": 2, "capabilities": ["BLS", "ALS"], "status": "AVAILABLE"},
     {"id": "A5", "name": "Ambulance Alpha-5 (Reserve)", "type": "AMBULANCE", "latitude": 12.9720, "longitude": 77.6200, "capacity": 2, "capabilities": ["BLS"], "status": "AVAILABLE"},
+    {"id": "A6", "name": "Ambulance Alpha-West", "type": "AMBULANCE", "latitude": 13.0050, "longitude": 77.5020, "capacity": 2, "capabilities": ["BLS", "ALS"], "status": "AVAILABLE"},
     
     # Rescue & Fire Teams
     {"id": "R1", "name": "Rescue Team Bravo-1", "type": "RESCUE_TEAM", "latitude": 12.9780, "longitude": 77.5950, "capacity": 5, "capabilities": ["urban_rescue", "fire"], "status": "AVAILABLE"},
     {"id": "R2", "name": "Rescue Team Bravo-2", "type": "RESCUE_TEAM", "latitude": 12.9700, "longitude": 77.6000, "capacity": 5, "capabilities": ["urban_rescue"], "status": "AVAILABLE"},
     {"id": "R3", "name": "Rescue Team Bravo-3 (Reserve)", "type": "RESCUE_TEAM", "latitude": 12.9580, "longitude": 77.5890, "capacity": 5, "capabilities": ["fire", "hazmat"], "status": "AVAILABLE"},
+    {"id": "R4", "name": "Rescue Team Bravo-West", "type": "RESCUE_TEAM", "latitude": 13.0080, "longitude": 77.4950, "capacity": 5, "capabilities": ["fire", "hazmat", "urban_rescue"], "status": "AVAILABLE"},
     
     # Medical Trauma Units
     {"id": "M1", "name": "Medical Unit M1", "type": "MEDICAL_UNIT", "latitude": 12.9680, "longitude": 77.5880, "capacity": 10, "capabilities": ["trauma", "surgery"], "status": "AVAILABLE"},
@@ -68,6 +70,7 @@ SEED_RESOURCES = [
     # Police Patrol Units
     {"id": "P1", "name": "Police Unit P1", "type": "POLICE_UNIT", "latitude": 12.9730, "longitude": 77.5920, "capacity": 4, "capabilities": ["traffic", "crowd_control"], "status": "AVAILABLE"},
     {"id": "P2", "name": "Police Unit P2 (Reserve)", "type": "POLICE_UNIT", "latitude": 12.9660, "longitude": 77.6080, "capacity": 4, "capabilities": ["security", "cordon"], "status": "AVAILABLE"},
+    {"id": "P3", "name": "Police Unit P-West", "type": "POLICE_UNIT", "latitude": 12.9980, "longitude": 77.5100, "capacity": 4, "capabilities": ["traffic", "cordon"], "status": "AVAILABLE"},
 ]
 
 async def seed_database(lat: float = None, lng: float = None):
