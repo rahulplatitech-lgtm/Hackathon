@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     VICTIM_WEIGHT: float = 0.20
     WAITING_TIME_WEIGHT: float = 0.15
     SCARCITY_WEIGHT: float = 0.10
+    GOOGLE_MAPS_API_KEY: str = ""
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_FROM_NUMBER: str = ""
@@ -24,5 +25,6 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()
