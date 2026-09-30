@@ -51,6 +51,8 @@ class VoiceChatRequest(BaseModel):
     reporter_lat: Optional[float] = None
     reporter_lng: Optional[float] = None
     dispatch_now: bool = False
+    incident_id: Optional[str] = None
+    report_id: Optional[str] = None
 
 class VoiceChatResponse(BaseModel):
     reply: str

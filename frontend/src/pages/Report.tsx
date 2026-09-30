@@ -191,19 +191,24 @@ export default function Report() {
         <ChatGPTVoiceBot 
           lat={lat ?? undefined} 
           lng={lng ?? undefined} 
-          onClose={() => setMode('idle')} 
+          onClose={() => {
+            if (result) {
+              setMode('submitted');
+            } else {
+              setMode('idle');
+            }
+          }} 
           onDispatched={(resp) => {
             if (resp.report_id) {
               setResult({
                 id: resp.report_id,
-                raw_text: text || 'Voice SOS Report',
-                preliminary_type: resp.incident_type || 'General Incident',
+                raw_text: text || 'Voice SOS Emergency Report',
+                preliminary_type: resp.incident_type || 'General Emergency',
                 ai_confidence: 0.95,
                 extracted_location: resp.extracted_location || (lat != null && lng != null ? `${lat.toFixed(3)}, ${lng.toFixed(3)}` : undefined),
-                status: 'RESOLVED',
+                status: 'ACTIVE',
                 created_at: new Date().toISOString(),
               } as IncidentReport);
-              setMode('submitted');
             }
           }}
         />

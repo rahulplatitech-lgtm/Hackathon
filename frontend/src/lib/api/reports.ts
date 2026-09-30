@@ -38,11 +38,15 @@ export const sendVoiceAssistantChat = (
   messages: VoiceChatMessage[],
   lat?: number,
   lng?: number,
-  dispatch_now = false
+  dispatch_now = false,
+  incident_id?: string,
+  report_id?: string
 ) =>
   post<VoiceChatResponse>('/api/reports/voice-assistant/chat', {
     messages,
     reporter_lat: lat,
     reporter_lng: lng,
     dispatch_now,
+    incident_id,
+    report_id,
   });

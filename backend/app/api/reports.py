@@ -142,25 +142,26 @@ async def voice_assistant_chat(req: VoiceChatRequest):
         reporter_lat=req.reporter_lat,
         reporter_lng=req.reporter_lng,
         dispatch_now=req.dispatch_now,
+        incident_id=req.incident_id,
     )
 
-    report_id = None
-    incident_id = None
-    dispatched = False
+    report_id = req.report_id
+    incident_id = req.incident_id
+    dispatched = bool(req.incident_id) or req.dispatch_now or result.get("auto_dispatch", False)
 
-    if req.dispatch_now:
-        dispatched = True
+    # If dispatch is triggered and incident hasn't been created yet in this session
+    if dispatched and not incident_id:
         report_id = gen_id()[:8]
         incident_id = f"INC-{gen_id()[:4].upper()}"
 
-        convo_summary = "\n".join([f"{m.role.capitalize()}: {m.content}" for m in req.messages])
+        convo_summary = "\n".join([f"{m.role.capitalize()}: {m.content}" for m in req.messages if m.content != "HELLO_START"])
         lat = req.reporter_lat or 12.9716
         lng = req.reporter_lng or 77.5946
 
         report = IncidentReport(
             id=report_id,
             input_type="voice_agent",
-            raw_text=convo_summary,
+            raw_text=convo_summary or f"Voice SOS: {result['incident_type']}",
             transcript=convo_summary,
             reporter_lat=lat,
             reporter_lng=lng,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, PhoneOff, Send, Volume2, VolumeX, Navigation, ArrowUp } from 'lucide-react';
+import { Mic, PhoneOff, Send, Volume2, VolumeX, Navigation, ArrowUp, ShieldAlert, CheckCircle2, LifeBuoy } from 'lucide-react';
 import { sendVoiceAssistantChat, VoiceChatMessage, VoiceChatResponse } from '../../lib/api/reports';
 
 interface ChatGPTVoiceBotProps {
@@ -9,7 +9,14 @@ interface ChatGPTVoiceBotProps {
   onDispatched?: (response: VoiceChatResponse) => void;
 }
 
-type BotState = 'connecting' | 'listening' | 'thinking' | 'speaking' | 'dispatched';
+type BotState = 'connecting' | 'listening' | 'thinking' | 'speaking';
+
+const SUGGESTED_QUESTIONS = [
+  "What should I do right now?",
+  "How long will help take to arrive?",
+  "Can I throw water on the fire?",
+  "How do I treat the injured person?",
+];
 
 export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: ChatGPTVoiceBotProps) {
   const [botState, setBotState] = useState<BotState>('connecting');
@@ -20,15 +27,18 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
   const [isMicActive, setIsMicActive] = useState(true);
   const [manualText, setManualText] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+  const [isDispatched, setIsDispatched] = useState(false);
   const [extractedInfo, setExtractedInfo] = useState<{
     type?: string;
     severity?: number;
     urgency?: string;
     resources?: string[];
+    location?: string;
   }>({});
-  const [, setDispatchedData] = useState<VoiceChatResponse | null>(null);
 
   // Synchronous refs to prevent React state closure bugs
+  const incidentIdRef = useRef<string | undefined>(undefined);
+  const reportIdRef = useRef<string | undefined>(undefined);
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(typeof window !== 'undefined' ? window.speechSynthesis : null);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -57,7 +67,7 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
 
       const utterance = new SpeechSynthesisUtterance(textToSpeak);
       currentUtteranceRef.current = utterance;
-      utterance.rate = 1.05;
+      utterance.rate = 1.02;
       utterance.pitch = 1.0;
 
       const voices = synthRef.current.getVoices();
@@ -81,7 +91,8 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
       utterance.onend = done;
       utterance.onerror = done;
 
-      const estTime = Math.max(2000, (textToSpeak.split(' ').length / 2.5) * 1000 + 1000);
+      // Safety timeout in case browser speech API hangs
+      const estTime = Math.max(2500, (textToSpeak.split(' ').length / 2.2) * 1000 + 1200);
       setTimeout(() => {
         if (!finished && botStateRef.current === 'speaking') {
           done();
@@ -189,7 +200,9 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
         if (unmounted) return;
 
         setAiText(res.reply);
-        setMessages([{ role: 'assistant', content: res.reply }]);
+        const greetingMessages: VoiceChatMessage[] = [{ role: 'assistant', content: res.reply }];
+        setMessages(greetingMessages);
+        messagesRef.current = greetingMessages;
 
         speak(res.reply, () => {
           if (!unmounted && isMicActiveRef.current) {
@@ -198,8 +211,11 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
         });
       } catch (err) {
         if (unmounted) return;
-        const fallback = 'Emergency Dispatch active. Please describe what happened and where you need help.';
+        const fallback = 'Crisis Command Emergency AI here. Tell me what happened and what help you need.';
         setAiText(fallback);
+        const fallbackMessages: VoiceChatMessage[] = [{ role: 'assistant', content: fallback }];
+        setMessages(fallbackMessages);
+        messagesRef.current = fallbackMessages;
         speak(fallback, () => {
           if (!unmounted && isMicActiveRef.current) startListening();
         });
@@ -228,40 +244,54 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
       { role: 'user', content: userText }
     ];
     setMessages(newHistory);
+    messagesRef.current = newHistory;
     setBotState('thinking');
 
     try {
       const response = await sendVoiceAssistantChat(
         newHistory,
         lat,
-        lng
+        lng,
+        false,
+        incidentIdRef.current,
+        reportIdRef.current
       );
 
       setAiText(response.reply);
-      setMessages([...newHistory, { role: 'assistant', content: response.reply }]);
+      const updatedHistory: VoiceChatMessage[] = [
+        ...newHistory,
+        { role: 'assistant', content: response.reply }
+      ];
+      setMessages(updatedHistory);
+      messagesRef.current = updatedHistory;
 
       setExtractedInfo({
         type: response.incident_type,
         severity: response.severity,
         urgency: response.urgency,
         resources: response.required_resources,
+        location: response.extracted_location,
       });
 
-      if (response.ready_to_dispatch || response.dispatched) {
-        setBotState('dispatched');
-        setDispatchedData(response);
-        if (onDispatched) onDispatched(response);
-        speak(response.reply, () => {
-          setTimeout(() => onClose(), 2500);
-        });
-      } else {
-        speak(response.reply, () => {
-          if (isMicActiveRef.current) startListening();
-        });
+      if (response.incident_id) {
+        incidentIdRef.current = response.incident_id;
       }
+      if (response.report_id) {
+        reportIdRef.current = response.report_id;
+      }
+
+      if (response.dispatched) {
+        setIsDispatched(true);
+        if (onDispatched) onDispatched(response);
+      }
+
+      // DO NOT close the modal! Stay live so caller can continue conversation
+      speak(response.reply, () => {
+        if (isMicActiveRef.current) startListening();
+      });
     } catch (err) {
       console.error('Error during voice chat:', err);
-      const fallbackReply = 'I received your message and alerted dispatch. What is your exact location or condition?';
+      const fallbackReply = 'I heard you and dispatch is tracking your status. Are you in a safe position right now?';
       setAiText(fallbackReply);
       speak(fallbackReply, () => {
         if (isMicActiveRef.current) startListening();
@@ -283,18 +313,31 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
     setIsMuted(!isMuted);
   };
 
+  const handleEndCall = () => {
+    stopListening();
+    if (synthRef.current) synthRef.current.cancel();
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-between p-6 sm:p-10 select-none">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-4 sm:p-8 select-none">
       {/* Top Header */}
       <div className="w-full max-w-2xl flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Emergency Voice Assistant</span>
+        <div className="flex items-center gap-2.5">
+          <span className={`w-2.5 h-2.5 rounded-full ${isDispatched ? 'bg-emerald-500 animate-ping' : 'bg-red-500 animate-pulse'}`} />
+          <span className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
+            {isDispatched ? 'Units Dispatched · Live Line' : 'Emergency Voice Assistant'}
+          </span>
+          {isDispatched && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-medium">
+              <CheckCircle2 className="w-3 h-3" /> ETA ~3 mins
+            </span>
+          )}
         </div>
 
         {lat && lng && (
           <div className="hidden sm:flex items-center gap-1.5 text-slate-400 font-mono text-xs">
-            <Navigation className="w-3.5 h-3.5 text-slate-400" />
+            <Navigation className="w-3.5 h-3.5 text-blue-400" />
             <span>GPS: {lat.toFixed(3)}, {lng.toFixed(3)}</span>
           </div>
         )}
@@ -308,17 +351,18 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
             {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
           </button>
           <button 
-            onClick={onClose} 
-            className="p-2 rounded-full bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition"
+            onClick={handleEndCall} 
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-600/90 hover:bg-red-600 text-white text-xs font-medium transition shadow-sm cursor-pointer"
             title="End Call"
           >
-            <PhoneOff className="w-4 h-4 text-red-400" />
+            <PhoneOff className="w-3.5 h-3.5" />
+            <span>End Call</span>
           </button>
         </div>
       </div>
 
       {/* Center Voice Orb */}
-      <div className="flex flex-col items-center justify-center my-auto w-full max-w-lg text-center space-y-8">
+      <div className="flex flex-col items-center justify-center my-auto w-full max-w-lg text-center space-y-6">
         <div 
           className="relative cursor-pointer group"
           onClick={() => {
@@ -332,37 +376,48 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
             }
           }}
         >
-          {/* Subtle Outer Ring */}
-          <div className="absolute -inset-3 rounded-full bg-blue-500/10 blur-md pointer-events-none" />
+          {/* Subtle Outer Glow */}
+          <div className={`absolute -inset-4 rounded-full blur-xl pointer-events-none transition duration-500 ${
+            botState === 'speaking' ? 'bg-blue-500/20' : botState === 'listening' ? 'bg-emerald-500/15' : 'bg-slate-500/10'
+          }`} />
 
           {/* Clean Circular Orb */}
-          <div className={`relative w-40 h-40 sm:w-44 sm:h-44 rounded-full flex flex-col items-center justify-center text-white transition-all duration-500 shadow-card ${
+          <div className={`relative w-36 h-36 sm:w-44 sm:h-44 rounded-full flex flex-col items-center justify-center text-white transition-all duration-500 shadow-card ${
             botState === 'speaking'
-              ? 'bg-gradient-to-br from-blue-600 to-indigo-600 animate-orb-breathe'
+              ? 'bg-gradient-to-br from-blue-600 to-indigo-600 scale-105 shadow-blue-500/25'
               : botState === 'thinking'
-              ? 'bg-gradient-to-br from-indigo-600 to-purple-600'
+              ? 'bg-gradient-to-br from-indigo-600 to-purple-600 animate-pulse'
               : botState === 'listening'
-              ? 'bg-gradient-to-br from-slate-800 to-blue-600/80 animate-orb-breathe'
-              : 'bg-slate-800'
+              ? 'bg-gradient-to-br from-slate-900 to-blue-600/90 border border-blue-500/30'
+              : 'bg-slate-900 border border-slate-800'
           }`}>
-            <Mic className={`w-10 h-10 ${botState === 'listening' ? 'text-white' : 'text-blue-200'}`} />
-            <span className="text-[11px] font-medium tracking-wide uppercase mt-1 opacity-90">
-              {botState === 'listening' ? 'Listening' : botState === 'thinking' ? 'Processing' : botState === 'speaking' ? 'Speaking' : 'Ready'}
+            <Mic className={`w-9 h-9 sm:w-10 sm:h-10 transition duration-300 ${
+              botState === 'listening' ? 'text-emerald-400 scale-110' : 'text-white'
+            }`} />
+            <span className="text-[10px] sm:text-[11px] font-medium tracking-wider uppercase mt-2 opacity-90">
+              {botState === 'listening' ? 'Listening...' : botState === 'thinking' ? 'Processing...' : botState === 'speaking' ? 'Speaking...' : 'Ready'}
             </span>
           </div>
         </div>
 
-        {/* Speech Subtitles */}
+        {/* Speech Transcript & AI Subtitles */}
         <div className="w-full space-y-3">
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm text-left">
-            <p className="text-xs text-slate-400 font-medium mb-1">Dispatcher</p>
-            <p className="text-base text-slate-100 font-medium leading-relaxed">
+          <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm text-left">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-blue-400 font-semibold tracking-wide flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5" /> Dispatcher AI
+              </span>
+              {isDispatched && (
+                <span className="text-[10px] text-emerald-400 font-medium">Rescue Units Moving</span>
+              )}
+            </div>
+            <p className="text-sm sm:text-base text-slate-100 font-medium leading-relaxed">
               "{aiText}"
             </p>
           </div>
 
           {currentTranscript ? (
-            <div className="bg-slate-800/80 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-slate-200 flex items-center justify-between gap-3">
+            <div className="bg-slate-800/80 border border-slate-700/60 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-200 flex items-center justify-between gap-3">
               <span className="truncate">"{currentTranscript}"</span>
               <button
                 onClick={() => triggerSend(currentTranscript)}
@@ -373,35 +428,53 @@ export default function ChatGPTVoiceBot({ lat, lng, onClose, onDispatched }: Cha
               </button>
             </div>
           ) : botState === 'listening' ? (
-            <p className="text-xs text-slate-500">Listening to your voice...</p>
+            <p className="text-xs text-slate-400">Listening to your voice... Speak naturally or ask questions.</p>
           ) : null}
 
-          {/* Extracted Tags */}
-          {extractedInfo.type && (
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs">
+          {/* Quick Informational Tags */}
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            {extractedInfo.type && (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-xs">
                 {extractedInfo.type}
               </span>
-              {extractedInfo.severity && (
-                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-400 text-xs">
-                  Severity {extractedInfo.severity}/5
-                </span>
-              )}
-            </div>
-          )}
+            )}
+            {extractedInfo.severity && (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-amber-400 text-xs">
+                Severity {extractedInfo.severity}/5
+              </span>
+            )}
+            {isDispatched && (
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> Dispatched
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Bottom Controls */}
+      {/* Bottom Area: Suggested Quick Prompts & Input */}
       <div className="w-full max-w-xl flex flex-col items-center gap-3">
+        {/* Suggested Tap-to-Ask Prompts */}
+        <div className="w-full flex items-center justify-center gap-2 overflow-x-auto pb-1 text-xs">
+          {SUGGESTED_QUESTIONS.map((q, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleSendMessage(q)}
+              className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[11px] hover:text-white whitespace-nowrap transition cursor-pointer"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+
         {showTextInput ? (
           <form onSubmit={handleManualSubmit} className="w-full flex items-center gap-2">
             <input 
               type="text"
               value={manualText}
               onChange={e => setManualText(e.target.value)}
-              placeholder="Or type what happened..."
-              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+              placeholder="Type your question or report here..."
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
               autoFocus
             />
             <button
