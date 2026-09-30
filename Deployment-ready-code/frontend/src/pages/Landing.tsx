@@ -228,7 +228,7 @@ export default function Landing() {
               <Map
                 center={centerPos}
                 zoom={zoomLevel}
-                mapId={import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? "DEMO_MAP_ID" : undefined}
+                mapId="DEMO_MAP_ID"
                 disableDefaultUI={true}
                 className="w-full h-full"
               >

@@ -149,7 +149,7 @@ export default function NearbyHelp() {
             <Map
               center={mapCenter}
               zoom={14}
-              mapId={import.meta.env.VITE_GOOGLE_MAPS_API_KEY ? "DEMO_MAP_ID" : undefined}
+              mapId="DEMO_MAP_ID"
               disableDefaultUI={true}
               zoomControl={true}
               className="w-full h-full"
