@@ -53,3 +53,24 @@ async def test_medical_first_aid_questions():
     # CPR question
     res_cpr = await voice_dispatcher.chat([{"role": "user", "content": "He stopped breathing, what do I do?"}])
     assert "chest" in res_cpr["reply"].lower() or "compress" in res_cpr["reply"].lower()
+
+@pytest.mark.asyncio
+async def test_chatbox_satisfaction_and_auto_transition():
+    # Turn 1: Caller tells what happened near them
+    t1_history = [
+        {"role": "user", "content": "A fire just broke out on the second floor of the building near my house"}
+    ]
+    t1_res = await voice_dispatcher.chat(t1_history, reporter_lat=12.9716, reporter_lng=77.5946)
+    assert t1_res["incident_type"] == "Fire Emergency"
+    assert "fire" in t1_res["reply"].lower()
+
+    # Turn 2: Caller answers clarifying questions and satisfies chatbox
+    t2_history = [
+        {"role": "user", "content": "A fire just broke out on the second floor of the building near my house"},
+        {"role": "assistant", "content": t1_res["reply"]},
+        {"role": "user", "content": "Everyone is evacuated outside safely, please dispatch fire trucks now"}
+    ]
+    t2_res = await voice_dispatcher.chat(t2_history, reporter_lat=12.9716, reporter_lng=77.5946)
+    assert t2_res["dispatched"] is True
+    assert "command center" in t2_res["reply"].lower() or "authorized" in t2_res["reply"].lower()
+

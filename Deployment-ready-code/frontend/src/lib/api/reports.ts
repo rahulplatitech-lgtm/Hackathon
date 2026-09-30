@@ -29,6 +29,7 @@ export interface VoiceChatResponse {
   required_resources: string[];
   ready_to_dispatch: boolean;
   dispatched: boolean;
+  transition_to_command?: boolean;
   report_id?: string;
   incident_id?: string;
   extracted_location?: string;

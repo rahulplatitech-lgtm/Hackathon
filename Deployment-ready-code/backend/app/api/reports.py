@@ -200,6 +200,13 @@ async def voice_assistant_chat(req: VoiceChatRequest):
             "status": inc.status,
         })
 
+        # Auto-run planning optimization to dispatch available resources to this incident
+        try:
+            from app.api.planning import generate_plan
+            await generate_plan()
+        except Exception as e:
+            logger.warning(f"Auto-generate plan on incident creation: {e}")
+
     return VoiceChatResponse(
         reply=result["reply"],
         incident_type=result["incident_type"],
@@ -209,6 +216,7 @@ async def voice_assistant_chat(req: VoiceChatRequest):
         required_resources=result["required_resources"],
         ready_to_dispatch=result["ready_to_dispatch"],
         dispatched=dispatched,
+        transition_to_command=dispatched,
         report_id=report_id,
         incident_id=incident_id,
         extracted_location=result.get("extracted_location"),

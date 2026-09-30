@@ -63,6 +63,7 @@ class VoiceChatResponse(BaseModel):
     required_resources: List[str]
     ready_to_dispatch: bool
     dispatched: bool = False
+    transition_to_command: bool = False
     report_id: Optional[str] = None
     incident_id: Optional[str] = None
     extracted_location: Optional[str] = None

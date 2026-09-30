@@ -38,7 +38,7 @@ export default function Landing() {
               className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-medium transition shadow-sm"
             >
               <Radio className="w-4 h-4" />
-              <span>Emergency Voice SOS</span>
+              <span>Launch Emergency Chatbox</span>
             </Link>
           </div>
         </div>
@@ -54,14 +54,14 @@ export default function Landing() {
                 <AlertTriangle className="w-4 h-4" />
               </div>
               <h3 className="font-semibold text-sm text-white mb-1">
-                Emergency Voice SOS
+                Emergency AI Chatbox
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Spoken dialogue with Gemini conversational AI, acoustic distress analysis, and instant GPS extraction.
+                Interactive voice & text intake: describe emergencies, receive live guidance, and auto-transition to Tactical Command.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 group-hover:text-slate-200">
-              <span>Open SOS</span>
+              <span>Open Chatbox</span>
               <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
             </div>
           </Link>

@@ -259,14 +259,19 @@ class VoiceDispatcherAgent:
 
         turn_count = len([m for m in messages if m.get("role") == "user"])
 
-        # Check if caller wants dispatch triggered
-        dispatch_intent = any(w in user_lower for w in [
+        # Check if caller wants dispatch triggered or questions have been satisfied
+        satisfied_signals = [
             "send help", "send them", "send now", "hurry", "dispatch", "please come", 
-            "need help fast", "send assistance", "send fire", "send ambulance", "send police", "yes send"
-        ])
+            "need help fast", "send assistance", "send fire", "send ambulance", "send police", "yes send",
+            "done", "that's all", "thats all", "everything told", "ok send", "please dispatch",
+            "everyone is outside", "all outside", "nobody trapped", "no one trapped", "safe now",
+            "outside", "evacuated"
+        ]
+        dispatch_intent = any(w in user_lower for w in satisfied_signals)
 
-        auto_dispatch = dispatch_now or (dispatch_intent and (detected_type != "General Emergency" or lat is not None))
-        ready_to_dispatch = auto_dispatch or (turn_count >= 2 and detected_type != "General Emergency")
+        # Chatbox is satisfied if user explicitly requested dispatch, or turn_count >= 2 with recognized emergency
+        auto_dispatch = dispatch_now or (dispatch_intent and (detected_type != "General Emergency" or lat is not None)) or (turn_count >= 2 and detected_type != "General Emergency")
+        ready_to_dispatch = auto_dispatch or (turn_count >= 1 and detected_type != "General Emergency")
 
         # 6. Intent & Direct Question Answering
         is_question = (
@@ -381,12 +386,12 @@ class VoiceDispatcherAgent:
                         "Position yourself near an easily identifiable landmark so the arriving emergency crew can spot you."
                     )
 
-        # --- B. Caller Requesting Immediate Dispatch or Expressing Urgency ---
-        if not reply and (dispatch_intent or dispatch_now):
+        # --- B. Caller Requesting Immediate Dispatch or Intake Satisfied ---
+        if not reply and (dispatch_intent or dispatch_now or (auto_dispatch and not already_dispatched)):
             units_str = ", ".join([r.replace("_", " ").title() for r in resources])
             reply = (
                 f"Emergency {detected_type} response has been authorized. {units_str} are rolling toward {location_desc} with sirens. "
-                "I am remaining on the line with you. Are you currently in a safe position?"
+                "I am transferring you directly to the Tactical Command Center to view live tracking and real-time road routes. Stay in a safe position."
             )
 
         # --- C. Caller Indicating Help Arrived / Sirens / Gratitude ---

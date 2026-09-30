@@ -4,7 +4,7 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 
 const NAV = [
   { to: '/', label: 'Overview', icon: Shield },
-  { to: '/report', label: 'Emergency SOS', icon: AlertCircle },
+  { to: '/report', label: 'Emergency Chatbox', icon: Radio },
   { to: '/command', label: 'Command Center', icon: LayoutDashboard },
   { to: '/operator', label: 'Operator Triage', icon: Users },
   { to: '/simulation', label: 'Simulation', icon: FlaskConical },

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useIncidents } from '../hooks/useIncidents';
 import { useResources } from '../hooks/useResources';
 import { useCurrentPlan } from '../hooks/useCurrentPlan';
@@ -111,6 +112,25 @@ export default function Command() {
     data: any;
     position: { lat: number; lng: number };
   } | null>(null);
+
+  const [searchParams] = useSearchParams();
+  const incidentIdParam = searchParams.get('incidentId');
+
+  // Auto-focus on incident if transferred from the emergency chatbox
+  useEffect(() => {
+    if (incidentIdParam && incidents && incidents.length > 0) {
+      const target = incidents.find(i => i.id === incidentIdParam);
+      if (target) {
+        setSelectedIncidentId(target.id);
+        setMapCenter({ lat: target.latitude, lng: target.longitude });
+        setActiveInfoWindow({
+          type: 'incident',
+          data: target,
+          position: { lat: target.latitude, lng: target.longitude }
+        });
+      }
+    }
+  }, [incidentIdParam, incidents]);
 
   const qc = useQueryClient();
 
