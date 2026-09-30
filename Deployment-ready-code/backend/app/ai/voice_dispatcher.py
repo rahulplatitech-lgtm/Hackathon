@@ -45,7 +45,7 @@ class VoiceDispatcherAgent:
         if not last_user_msg or last_user_msg == "HELLO_START":
             lat_str = f"at GPS ({reporter_lat:.4f}, {reporter_lng:.4f})" if reporter_lat and reporter_lng else "active"
             return {
-                "reply": f"Crisis Command AI Dispatcher online, location {lat_str}. Tell me what is happening and what help you need.",
+                "reply": f"CrisisSync AI Dispatcher online, location {lat_str}. I am right here with you. Take a deep breath and tell me what is happening.",
                 "incident_type": "General Emergency",
                 "severity": 3,
                 "urgency": "MEDIUM",
@@ -91,12 +91,12 @@ class VoiceDispatcherAgent:
     ) -> Optional[Dict[str, Any]]:
         """Call Gemini 1.5 Flash using direct asynchronous REST."""
         system_instruction = (
-            "You are Crisis Command AI, an elite 911 emergency voice dispatcher and ChatGPT-style crisis assistant. "
+            "You are CrisisSync AI, a calm, highly empathetic, and expert emergency voice dispatcher and ChatGPT-style crisis assistant. "
             "Your voice responses are spoken aloud to a caller in distress via Web Speech TTS. "
             "CRITICAL INSTRUCTIONS:\n"
             "1. ALWAYS directly answer whatever specific questions the user asks (e.g. 'what should I do?', 'how long will you take?', "
             "'how do I do CPR?', 'can I throw water on the fire?'). Provide immediate, life-saving first-aid and safety guidance.\n"
-            "2. Keep spoken replies concise, calm, and authoritative (1 to 3 clear spoken sentences max). Never sound robotic.\n"
+            "2. Keep spoken replies warm, human, reassuring, and concise (1 to 3 clear spoken sentences max). Never sound robotic, cold, or bureaucratic.\n"
             "3. Remember what the user already stated in the conversation history—NEVER ask for information they have already provided.\n"
             "4. NEVER repeat the same stock question like 'Do you need ambulances, police, or rescue teams?'.\n"
             "5. If emergency services are dispatched, reassure the caller that help is rolling and stay on the line to guide them.\n"
@@ -496,8 +496,8 @@ class VoiceDispatcherAgent:
         # --- J. First Turn Intro Fallback ---
         if not reply and turn_count <= 1:
             reply = (
-                f"Crisis Command Dispatcher tracking your signal at {location_desc}. "
-                "Tell me what happened and if anyone is injured or in immediate danger."
+                f"CrisisSync Dispatcher tracking your signal at {location_desc}. "
+                "I am here to help you. Tell me what happened and if anyone is injured or in danger."
             )
 
         # --- K. Dynamic Conversational Follow-up (Adaptive, Non-Repetitive) ---
@@ -543,7 +543,7 @@ class VoiceDispatcherAgent:
         lng: Optional[float],
         dispatch_now: bool
     ) -> Dict[str, Any]:
-        reply = data.get("reply", "Crisis Command Dispatcher here. What is your emergency?")
+        reply = data.get("reply", "CrisisSync Dispatcher here. What is your emergency?")
         incident_type = data.get("incident_type", "General Emergency")
         severity = int(data.get("severity", 3))
         urgency = data.get("urgency", "HIGH")

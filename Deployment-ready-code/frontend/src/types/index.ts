@@ -94,3 +94,46 @@ export interface WSEvent {
   event: string;
   data: Record<string, unknown>;
 }
+
+export interface PasserbyCitizen {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  distance_meters: number;
+  is_within_100m: boolean;
+  skill: string;
+  phone_masked: string;
+  status: string;
+  has_first_aid_kit: boolean;
+}
+
+export interface PasserbyBroadcast {
+  broadcast_id: string;
+  timestamp: string;
+  incident_id: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  total_citizens_detected: number;
+  alerts_transmitted: number;
+  bystander_first_aiders: number;
+  alert_title: string;
+  alert_message: string;
+  recipients: PasserbyCitizen[];
+}
+
+export interface EmergencyOutlet {
+  id: string;
+  name: string;
+  type: 'HOSPITAL' | 'AMBULANCE' | 'AED' | 'POLICE' | 'PHARMACY';
+  area: string;
+  latitude: number;
+  longitude: number;
+  distance_km: number;
+  eta_minutes: number;
+  phone: string;
+  is_open_24_7: boolean;
+  capabilities: string[];
+}
+

@@ -9,11 +9,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <header className="bg-slate-900 border-b border-slate-800 p-4">
         <div className="container mx-auto flex justify-between items-center">
-          <Link to="/" className="text-xl font-bold text-red-500">Crisis Command AI</Link>
+          <Link to="/" className="text-xl font-bold text-red-500">CrisisSync AI</Link>
           <nav className="flex gap-4">
-            <Link to="/report" className="hover:text-red-400">Report</Link>
-            <Link to="/operator" className="hover:text-red-400">Operator</Link>
+            <Link to="/nearby" className="hover:text-red-400">Nearby Help</Link>
+            <Link to="/report" className="hover:text-red-400">AI Chatbox</Link>
             <Link to="/command" className="hover:text-red-400">Command Center</Link>
+            <Link to="/passerby" className="hover:text-red-400">100m Alerts</Link>
             <Link to="/simulation" className="hover:text-red-400">Simulation</Link>
           </nav>
         </div>

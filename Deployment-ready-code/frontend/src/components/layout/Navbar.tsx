@@ -1,12 +1,13 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, Radio, Users, LayoutDashboard, FlaskConical, AlertCircle } from 'lucide-react';
+import { Shield, Radio, LayoutDashboard, FlaskConical, Heart, Compass, Bell } from 'lucide-react';
 import { useWebSocket } from '../../hooks/useWebSocket';
 
 const NAV = [
-  { to: '/', label: 'Overview', icon: Shield },
-  { to: '/report', label: 'Emergency Chatbox', icon: Radio },
+  { to: '/', label: 'Overview', icon: Heart },
+  { to: '/nearby', label: 'Nearby Help', icon: Compass },
+  { to: '/report', label: 'Emergency AI Chatbox', icon: Radio },
   { to: '/command', label: 'Command Center', icon: LayoutDashboard },
-  { to: '/operator', label: 'Operator Triage', icon: Users },
+  { to: '/passerby', label: '100m Alerts', icon: Bell },
   { to: '/simulation', label: 'Simulation', icon: FlaskConical },
 ];
 
@@ -19,15 +20,15 @@ export default function Navbar() {
       {/* Brand */}
       <div className="flex items-center gap-6">
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
-            <Shield className="w-4 h-4" />
+          <div className="w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center shadow-xs">
+            <Heart className="w-4 h-4 fill-white" />
           </div>
           <div>
             <span className="font-bold text-sm tracking-tight text-white block leading-tight">
-              Crisis Command
+              CrisisSync AI
             </span>
             <span className="text-[11px] text-slate-400 block leading-tight">
-              Emergency Response AI
+              Emergency Response Platform
             </span>
           </div>
         </Link>
@@ -46,7 +47,7 @@ export default function Navbar() {
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                 }`}
               >
-                <n.icon className={`w-3.5 h-3.5 ${isActive ? 'text-blue-400' : 'text-slate-400'}`} />
+                <n.icon className={`w-3.5 h-3.5 ${isActive ? 'text-red-400' : 'text-slate-400'}`} />
                 <span>{n.label}</span>
               </Link>
             );

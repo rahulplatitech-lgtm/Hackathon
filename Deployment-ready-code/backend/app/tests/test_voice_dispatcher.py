@@ -5,7 +5,7 @@ from app.ai.voice_dispatcher import voice_dispatcher
 @pytest.mark.asyncio
 async def test_greeting():
     res = await voice_dispatcher.chat([{"role": "user", "content": "HELLO_START"}])
-    assert "Crisis Command" in res["reply"]
+    assert "CrisisSync" in res["reply"]
     assert res["incident_type"] == "General Emergency"
 
 @pytest.mark.asyncio

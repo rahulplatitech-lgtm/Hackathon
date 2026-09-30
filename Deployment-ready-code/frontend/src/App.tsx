@@ -2,9 +2,10 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Layout from './components/layout/Layout';
 import Landing from './pages/Landing';
+import NearbyHelp from './pages/NearbyHelp';
 import Report from './pages/Report';
-import Operator from './pages/Operator';
 import Command from './pages/Command';
+import PasserbyAlerts from './pages/PasserbyAlerts';
 import Simulation from './pages/Simulation';
 
 const queryClient = new QueryClient({
@@ -18,9 +19,10 @@ export default function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Landing />} />
+            <Route path="/nearby" element={<NearbyHelp />} />
             <Route path="/report" element={<Report />} />
-            <Route path="/operator" element={<Operator />} />
             <Route path="/command" element={<Command />} />
+            <Route path="/passerby" element={<PasserbyAlerts />} />
             <Route path="/simulation" element={<Simulation />} />
           </Route>
         </Routes>
