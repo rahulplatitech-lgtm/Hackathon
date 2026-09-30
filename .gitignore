@@ -1,0 +1,41 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Dependencies & Build artifacts
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Databases & local uploads
+*.db
+*.sqlite
+*.sqlite3
+backend/crisis_command.db
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Local environment & secret files
+.env
+.env.local
+frontend/.env
+
+# Temporary / Scratch build scripts
+build_*.py
+fix_*.py
+rewrite_*.py
+generate_frontend.py
+
+# Operating System files
+.DS_Store
+Thumbs.db
