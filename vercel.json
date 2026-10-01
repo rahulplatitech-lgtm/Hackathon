@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd Deployment-ready-code/frontend && npm install && npm run build",
+  "outputDirectory": "Deployment-ready-code/frontend/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
