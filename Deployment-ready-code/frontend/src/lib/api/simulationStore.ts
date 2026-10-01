@@ -122,6 +122,9 @@ class SimulationStore {
       this.resources = JSON.parse(JSON.stringify(INITIAL_RESOURCES));
       this.plan = null;
     }
+    if (!this.plan) {
+      this.generatePlan();
+    }
     this.isInitialized = true;
   }
 
@@ -161,6 +164,7 @@ class SimulationStore {
     }));
 
     this.plan = null;
+    this.generatePlan();
     this.save();
     this.emitEvent('simulation.reset', {});
     return { status: "seeded", incidents: this.incidents.length, resources: this.resources.length };
@@ -176,9 +180,16 @@ class SimulationStore {
     return this.resources;
   }
 
-  public getCurrentPlan(): ResponsePlan | null {
+  public getCurrentPlan(): any {
     this.init();
-    return this.plan;
+    if (!this.plan) {
+      this.generatePlan();
+    }
+    return {
+      plan: this.plan,
+      plan_change: null,
+      allocations: this.plan?.allocations || []
+    };
   }
 
   public addNewIncident(custom?: Partial<Incident>) {
