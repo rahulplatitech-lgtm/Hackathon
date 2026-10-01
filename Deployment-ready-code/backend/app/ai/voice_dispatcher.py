@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional
 import httpx
 from app.config import settings
 from app.ai.demo import INCIDENT_TYPES
+from app.ai.clinical_triage_engine import clinical_triage_reasoner
 
 logger = logging.getLogger(__name__)
 
@@ -75,15 +76,14 @@ class VoiceDispatcherAgent:
                 if gemini_result:
                     return gemini_result
             except Exception as e:
-                logger.warning(f"Gemini API call failed, using intelligent local engine: {e}")
+                logger.warning(f"Gemini API call failed, using intelligent clinical triage engine: {e}")
 
-        # Intelligent Built-in Conversational Emergency Engine
-        return self._local_dialogue_engine(
+        # Intelligent Neural Clinical Emergency Triage Engine
+        return clinical_triage_reasoner.analyze_and_respond(
             messages=messages,
-            last_user_msg=last_user_msg,
-            lat=reporter_lat,
-            lng=reporter_lng,
-            dispatch_now=dispatch_now
+            reporter_lat=reporter_lat,
+            reporter_lng=reporter_lng,
+            dispatch_now=dispatch_now,
         )
 
     async def _call_gemini_rest(

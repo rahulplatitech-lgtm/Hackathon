@@ -422,18 +422,13 @@ export default function Report() {
         setIsSatisfied(true);
         setDispatchedIncidentId(res.incident_id || 'INC-LIVE');
 
-        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-        let sec = 5;
-        setCountdown(sec);
-        countdownTimerRef.current = setInterval(() => {
-          sec -= 1;
-          if (sec <= 0) {
-            clearInterval(countdownTimerRef.current);
-            navigate(`/command?incidentId=${res.incident_id || ''}`);
-          } else {
-            setCountdown(sec);
-          }
-        }, 1000);
+        // If caller explicitly asked to transition to map/command center, navigate immediately
+        const wantsCommand = ['command center', 'show map', 'show route', 'take me to map', 'track'].some(w => 
+          textToSend.toLowerCase().includes(w)
+        );
+        if (wantsCommand) {
+          navigate(`/command?incidentId=${res.incident_id || dispatchedIncidentId || ''}`);
+        }
       }
     } catch (err) {
       console.error('Chat error:', err);
@@ -752,9 +747,9 @@ export default function Report() {
             {isSatisfied && !isEscalated && (
               <button
                 onClick={handleManualTransition}
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition animate-pulse"
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition"
               >
-                <span>Command Center ({countdown ?? 0}s)</span>
+                <span>Command Center Map</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
@@ -936,9 +931,9 @@ export default function Report() {
 
               {/* Dispatch Confirmed Banner */}
               {isSatisfied && !isEscalated && (
-                <div className="mt-4 px-4 py-2 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 animate-pulse">
+                <div className="mt-4 px-4 py-2 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span className="font-bold">Responders Dispatched · Redirecting in {countdown ?? 0}s</span>
+                  <span className="font-bold">Responders Dispatched · Continuous Live Triage Active</span>
                 </div>
               )}
             </div>
