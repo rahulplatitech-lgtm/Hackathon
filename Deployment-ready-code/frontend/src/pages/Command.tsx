@@ -791,7 +791,7 @@ export default function Command() {
         {/* CENTER: Google Map with Incidents, Standby & Dispatched Units, and Routes */}
         <div className="flex-1 relative bg-slate-950 flex flex-col overflow-hidden">
           {/* Map Legend */}
-          <div className="absolute bottom-4 left-4 z-10 pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-lg px-3 py-2 text-xs space-y-1.5 shadow-lg">
+          <div className="absolute bottom-4 left-4 z-[1000] pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-lg px-3 py-2 text-xs space-y-1.5 shadow-lg">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
               <span className="text-slate-300 font-medium">Incident Location (S1-S5)</span>
@@ -812,7 +812,7 @@ export default function Command() {
 
           {/* Reset View Button */}
           {(selectedIncidentId || selectedResourceId) && (
-            <div className="absolute top-4 left-4 z-10 pointer-events-auto">
+            <div className="absolute top-4 left-4 z-[1000] pointer-events-auto">
               <button 
                 onClick={() => { setSelectedIncidentId(null); setSelectedResourceId(null); setMapCenter(null); setActiveInfoWindow(null); }}
                 className="bg-slate-900/90 backdrop-blur-md border border-slate-700 hover:bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-lg"
@@ -833,8 +833,8 @@ export default function Command() {
             >
               <MapController center={mapCenter || defaultCenter} />
               <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                attribution='&copy; CARTO &copy; OpenStreetMap'
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                attribution='Tiles &copy; Esri'
               />
 
               {/* 1. DISPATCHED ROUTES (Polylines connecting vehicles to incidents) */}
@@ -929,7 +929,7 @@ export default function Command() {
 
             {/* In-Map Tactical Glassmorphism HUD Card for Selection */}
             {activeInfoWindow && (
-              <div className="absolute top-4 right-4 z-20 w-80 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl p-3.5 shadow-2xl text-xs text-slate-200 pointer-events-auto">
+              <div className="absolute top-4 right-4 z-[1000] w-80 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl p-3.5 shadow-2xl text-xs text-slate-200 pointer-events-auto">
                 <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-800">
                   <span className="font-mono text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     Tactical HUD Inspect

@@ -215,7 +215,7 @@ export default function Landing() {
         <main className="flex-1 relative bg-slate-100 flex flex-col overflow-hidden min-h-[500px]">
           
           {/* Floating Location Card at Top-Left of Map */}
-          <div className="absolute top-4 left-4 z-20 bg-white/95 backdrop-blur-xs border border-slate-200/90 rounded-2xl p-3 shadow-md text-xs max-w-xs">
+          <div className="absolute top-4 left-4 z-[1000] bg-white/95 backdrop-blur-xs border border-slate-200/90 rounded-2xl p-3 shadow-md text-xs max-w-xs pointer-events-auto">
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>EXAMPLE LOCATION</span>
@@ -226,7 +226,7 @@ export default function Landing() {
           </div>
 
           {/* Zoom Controls at Top-Right of Map */}
-          <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5">
+          <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-1.5 pointer-events-auto">
             <button
               onClick={() => setZoomLevel(prev => Math.min(19, prev + 1))}
               className="w-8 h-8 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-700 hover:text-slate-900 flex items-center justify-center font-bold transition hover:bg-slate-50"
@@ -257,8 +257,8 @@ export default function Landing() {
             >
               <MapController center={centerPos} zoom={zoomLevel} />
               <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                attribution='&copy; CARTO &copy; OpenStreetMap'
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+                attribution='Tiles &copy; Esri'
               />
 
               {/* 100m Geofence Perimeter around center */}
@@ -293,21 +293,21 @@ export default function Landing() {
             </MapContainer>
 
             {/* Road Label Landmarks from Image 3 */}
-            <div className="absolute top-28 right-24 pointer-events-none text-xs font-bold text-slate-500/80 uppercase tracking-wider">
+            <div className="absolute top-28 right-24 pointer-events-none text-xs font-bold text-slate-700 uppercase tracking-wider z-[1000] bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded shadow-xs">
               JANPATH
             </div>
-            <div className="absolute top-44 left-1/3 pointer-events-none text-xs font-bold text-slate-500/80 uppercase tracking-wider">
+            <div className="absolute top-44 left-1/3 pointer-events-none text-xs font-bold text-slate-700 uppercase tracking-wider z-[1000] bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded shadow-xs">
               BARAKHAMBA RD
             </div>
-            <div className="absolute bottom-28 right-28 pointer-events-none text-xs font-bold text-slate-500/80 uppercase tracking-wider">
+            <div className="absolute bottom-28 right-28 pointer-events-none text-xs font-bold text-slate-700 uppercase tracking-wider z-[1000] bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded shadow-xs">
               MANDI HOUSE
             </div>
-            <div className="absolute bottom-12 left-1/4 pointer-events-none text-xs font-bold text-slate-500/80 uppercase tracking-wider">
+            <div className="absolute bottom-12 left-1/4 pointer-events-none text-xs font-bold text-slate-700 uppercase tracking-wider z-[1000] bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded shadow-xs">
               BENGALI MARKET
             </div>
 
             {/* Central Pulsing SOS Button (Matching Image 3) */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1000]">
               <div className="relative pointer-events-auto flex flex-col items-center">
                 
                 {/* Glowing Outer Ripple Circles */}
@@ -328,14 +328,14 @@ export default function Landing() {
                 </button>
 
                 {/* Subtitle Under SOS */}
-                <div className="mt-3 px-3 py-1 rounded-full bg-white/90 backdrop-blur-xs border border-slate-200 text-[11px] font-semibold text-slate-700 shadow-xs">
+                <div className="mt-3 px-3 py-1 rounded-full bg-white/95 backdrop-blur-xs border border-slate-200 text-[11px] font-semibold text-slate-700 shadow-md">
                   Example center &middot; 100m Geofence Active
                 </div>
               </div>
             </div>
 
             {/* Bottom Footnote */}
-            <div className="absolute bottom-3 left-4 text-[10px] text-slate-500 bg-white/80 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-slate-200/80">
+            <div className="absolute bottom-3 left-4 text-[10px] text-slate-600 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-slate-200 shadow-xs z-[1000]">
               Interactive map illustration &middot; Locations and travel times are examples
             </div>
           </div>

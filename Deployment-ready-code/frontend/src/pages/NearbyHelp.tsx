@@ -233,8 +233,8 @@ export default function NearbyHelp() {
           >
             <MapController center={mapCenter} />
             <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-              attribution='&copy; CARTO &copy; OpenStreetMap'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+              attribution='Tiles &copy; Esri'
             />
             {filteredOutlets.map(outlet => (
               <Marker
@@ -267,12 +267,12 @@ export default function NearbyHelp() {
           </MapContainer>
 
           {/* Floating Map Overlay Label */}
-          <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs flex items-center gap-2">
+          <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs flex items-center gap-2 z-[1000]">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-medium text-slate-800">Nearby emergency help &middot; CrisisSync AI</span>
           </div>
 
-          <div className="absolute bottom-2 left-3 text-[10px] text-slate-500 bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded">
+          <div className="absolute bottom-2 left-3 text-[10px] text-slate-600 bg-white/90 backdrop-blur-xs px-2 py-0.5 rounded shadow-xs z-[1000]">
             Illustrative map &middot; not live navigation
           </div>
         </div>

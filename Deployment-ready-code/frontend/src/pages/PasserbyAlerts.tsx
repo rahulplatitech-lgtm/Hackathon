@@ -253,8 +253,8 @@ export default function PasserbyAlerts() {
                 >
                   <MapController center={{ lat: centerLat, lng: centerLng }} />
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; CARTO &copy; OpenStreetMap'
+                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+                    attribution='Tiles &copy; Esri'
                   />
 
                   {/* Center Emergency Incident Marker */}
@@ -315,7 +315,7 @@ export default function PasserbyAlerts() {
                 </MapContainer>
 
                 {/* Floating Geofence Pill */}
-                <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs text-xs font-semibold text-slate-700 flex items-center gap-1.5 z-[1000]">
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
                   <span>100m Active Broadcast Radius</span>
                 </div>
