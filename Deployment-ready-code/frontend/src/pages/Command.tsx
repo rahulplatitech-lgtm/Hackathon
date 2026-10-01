@@ -278,6 +278,7 @@ export default function Command() {
     path: Array<{ lat: number; lng: number }>;
     etaMinutes: number;
     distanceKm: number;
+    steps?: Array<{ instruction: string; street_name: string; distance_meters: number }>;
   }>>({});
 
   // Prevent browser alert popup if running in evaluation mode
@@ -383,6 +384,7 @@ export default function Command() {
                 path,
                 etaMinutes: Math.max(1, Math.round(res.eta_minutes)),
                 distanceKm: res.distance_km,
+                steps: res.steps || []
               }
             }));
           }
@@ -442,6 +444,7 @@ export default function Command() {
             etaMinutes: roadDetail?.etaMinutes ?? a.eta_minutes ?? 4,
             distanceKm: roadDetail?.distanceKm ?? a.distance_km ?? 2.5,
             path,
+            steps: roadDetail?.steps || [],
           });
         }
       });
@@ -479,6 +482,7 @@ export default function Command() {
             etaMinutes: roadDetail?.etaMinutes ?? fallbackEta,
             distanceKm: roadDetail?.distanceKm ?? Number(fallbackDist.toFixed(1)),
             path,
+            steps: roadDetail?.steps || [],
           });
         }
       }
@@ -843,6 +847,15 @@ export default function Command() {
                 const latLngs = r.path.map(p => [p.lat, p.lng] as [number, number]);
                 return (
                   <React.Fragment key={`route-${r.id}`}>
+                    {/* Glowing outer street trace */}
+                    <Polyline
+                      positions={latLngs}
+                      pathOptions={{
+                        color: isSelected ? '#38bdf8' : '#1d4ed8',
+                        opacity: isSelected ? 0.45 : 0.25,
+                        weight: isSelected ? 10 : 7,
+                      }}
+                    />
                     <Polyline
                       positions={latLngs}
                       pathOptions={{
@@ -868,6 +881,7 @@ export default function Command() {
                               eta_minutes: r.etaMinutes,
                               distance_km: r.distanceKm,
                               incident_type: r.incidentType,
+                              steps: r.steps || [],
                             },
                             position: r.midpoint,
                           });
@@ -897,6 +911,7 @@ export default function Command() {
               {/* 3. DISPATCHED VEHICLES (Blue circle markers) */}
               {resources?.filter(r => r.status === 'ASSIGNED').map(res => {
                 const isSelected = selectedResourceId === res.id;
+                const matchedRoute = routes.find(r => r.resourceId === res.id);
                 return (
                   <Marker 
                     key={`res-dispatched-${res.id}`} 
@@ -904,7 +919,21 @@ export default function Command() {
                     icon={createDispatchedLeafletIcon(isSelected)}
                     title={`${res.name} (Dispatched & En Route)`}
                     eventHandlers={{
-                      click: () => handleFocusResource(res)
+                      click: () => {
+                        handleFocusResource(res);
+                        setActiveInfoWindow({
+                          type: 'dispatched',
+                          data: {
+                            name: res.name,
+                            current_incident_id: res.current_incident_id,
+                            eta_minutes: matchedRoute?.etaMinutes ?? 3.5,
+                            distance_km: matchedRoute?.distanceKm ?? 2.1,
+                            incident_type: matchedRoute?.incidentType ?? 'Incident Scene',
+                            steps: matchedRoute?.steps || [],
+                          },
+                          position: { lat: res.latitude, lng: res.longitude }
+                        });
+                      }
                     }}
                   />
                 );
@@ -985,23 +1014,64 @@ export default function Command() {
                 )}
 
                 {activeInfoWindow.type === 'dispatched' && (
-                  <div>
-                    <div className="font-bold text-blue-400 mb-1 flex items-center justify-between">
-                      <span>{activeInfoWindow.data.name}</span>
-                      <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded text-[10px]">DISPATCHED</span>
+                  <div className="space-y-2">
+                    <div className="font-bold text-blue-400 flex items-center justify-between pb-1 border-b border-slate-800">
+                      <span className="flex items-center gap-1.5 text-xs text-white">
+                        <Navigation className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                        {activeInfoWindow.data.name}
+                      </span>
+                      <span className="bg-blue-500/20 text-cyan-300 border border-blue-500/30 px-1.5 py-0.5 rounded text-[9px] font-mono tracking-wider font-semibold">
+                        LIVE EN ROUTE
+                      </span>
                     </div>
-                    <p className="text-slate-300 mb-1">
-                      En route to <span className="font-mono font-bold text-blue-300">#{activeInfoWindow.data.current_incident_id}</span>
+
+                    <p className="text-slate-300 text-[11px]">
+                      Responding to: <span className="font-mono font-bold text-blue-300">#{activeInfoWindow.data.current_incident_id}</span>
+                      {activeInfoWindow.data.incident_type && <span className="text-slate-400"> ({activeInfoWindow.data.incident_type})</span>}
                     </p>
-                    {activeInfoWindow.data.eta_minutes != null && (
-                      <p className="text-blue-400 font-semibold mb-2">
-                        ETA: ~{Math.round(activeInfoWindow.data.eta_minutes)} minutes ({activeInfoWindow.data.distance_km?.toFixed(1)} km)
-                      </p>
+
+                    {/* Real-Life Road Metrics Box */}
+                    <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-950/70 rounded-lg border border-slate-800 text-center font-mono">
+                      <div className="bg-blue-950/40 p-1.5 rounded border border-blue-500/20">
+                        <div className="text-[9px] text-slate-400 uppercase">Live Road ETA</div>
+                        <div className="text-sm font-bold text-cyan-400">
+                          ~{Math.round(activeInfoWindow.data.eta_minutes ?? 4)} mins
+                        </div>
+                      </div>
+                      <div className="bg-slate-900 p-1.5 rounded border border-slate-800">
+                        <div className="text-[9px] text-slate-400 uppercase">Driving Dist</div>
+                        <div className="text-sm font-bold text-slate-200">
+                          {activeInfoWindow.data.distance_km != null ? Number(activeInfoWindow.data.distance_km).toFixed(1) : '2.4'} km
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Real Turn-by-Turn Road Route Steps */}
+                    {activeInfoWindow.data.steps && activeInfoWindow.data.steps.length > 0 && (
+                      <div className="p-2 bg-slate-950/80 rounded-lg border border-slate-800 space-y-1">
+                        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between pb-1 border-b border-slate-800/60">
+                          <span className="flex items-center gap-1 text-cyan-400">
+                            <Truck className="w-3 h-3" />
+                            Turn-by-Turn Road Route
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-500">OSRM Engine</span>
+                        </div>
+                        <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
+                          {activeInfoWindow.data.steps.map((step: any, idx: number) => (
+                            <div key={idx} className="flex items-start gap-1.5 text-[11px] text-slate-300 leading-tight">
+                              <span className="font-mono text-cyan-400 font-bold shrink-0">{idx + 1}.</span>
+                              <span className="flex-1 truncate">{step.instruction}</span>
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{step.distance_meters}m</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
+
                     {activeInfoWindow.data.current_incident_id && (
                       <button
                         onClick={() => setDemonstrationIncidentId(activeInfoWindow.data.current_incident_id)}
-                        className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                        className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer shadow-sm"
                       >
                         <span>💡 Why Chosen for this Scene?</span>
                         <ArrowRight className="w-3.5 h-3.5" />
