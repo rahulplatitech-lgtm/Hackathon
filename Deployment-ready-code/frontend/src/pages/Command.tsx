@@ -6,7 +6,8 @@ import { useResources } from '../hooks/useResources';
 import { useCurrentPlan } from '../hooks/useCurrentPlan';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { generatePlan, replan, approvePlan } from '../lib/api/planning';
-import { APIProvider, Map, Marker, Polyline, InfoWindow } from '@vis.gl/react-google-maps';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import { getRoadRoute } from '../lib/api/routing';
 import { getEscalations, resolveEscalation, EscalationItem } from '../lib/api/reports';
 
@@ -21,87 +22,143 @@ import {
 } from 'lucide-react';
 import type { Incident, EmergencyResource, PlanDiffItem, Allocation } from '../types';
 
-// Helper to create Google Maps Size / Point objects safely
-const getSize = (w: number, h: number) => {
-  if (typeof window !== 'undefined' && (window as any).google?.maps?.Size) {
-    return new (window as any).google.maps.Size(w, h);
-  }
-  return { width: w, height: h };
-};
-
-const getPoint = (x: number, y: number) => {
-  if (typeof window !== 'undefined' && (window as any).google?.maps?.Point) {
-    return new (window as any).google.maps.Point(x, y);
-  }
-  return { x, y };
-};
+function MapController({ center }: { center: { lat: number; lng: number } }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([center.lat, center.lng], 13);
+  }, [center, map]);
+  return null;
+}
 
 // 1. INCIDENT MARKER (Red pin with S1-S5 severity tag)
-const createIncidentIcon = (severity: number, isSelected: boolean) => {
+const createIncidentLeafletIcon = (severity: number, isSelected: boolean) => {
   const w = isSelected ? 38 : 32;
   const h = isSelected ? 48 : 42;
   const color = severity >= 5 ? '#dc2626' : severity === 4 ? '#ea580c' : '#d97706';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 42" width="${w}" height="${h}">
-    <path d="M16 0 C7.16 0 0 7.16 0 16 C0 28 16 42 16 42 C16 42 32 28 32 16 C32 7.16 24.84 0 16 0 Z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
-    <circle cx="16" cy="15" r="9" fill="#000000" fill-opacity="0.3"/>
-    <text x="16" y="19" font-family="Arial, sans-serif" font-weight="900" font-size="11" fill="#ffffff" text-anchor="middle">S${severity}</text>
-  </svg>`;
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: getSize(w, h),
-    anchor: getPoint(w / 2, h),
-  };
+  const html = `<div style="transform:translate(-50%, -100%);cursor:pointer;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 42" width="${w}" height="${h}">
+      <path d="M16 0 C7.16 0 0 7.16 0 16 C0 28 16 42 16 42 C16 42 32 28 32 16 C32 7.16 24.84 0 16 0 Z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
+      <circle cx="16" cy="15" r="9" fill="#000000" fill-opacity="0.35"/>
+      <text x="16" y="19" font-family="Arial, sans-serif" font-weight="900" font-size="11" fill="#ffffff" text-anchor="middle">S${severity}</text>
+    </svg>
+  </div>`;
+  return L.divIcon({
+    className: 'custom-inc-marker',
+    html,
+    iconSize: [0, 0],
+  });
 };
 
 // 2. DISPATCHED VEHICLE (Royal blue circle with white vehicle cross)
-const createDispatchedIcon = (isSelected: boolean) => {
+const createDispatchedLeafletIcon = (isSelected: boolean) => {
   const s = isSelected ? 38 : 32;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="${s}" height="${s}">
-    <circle cx="18" cy="18" r="16" fill="#2563eb" stroke="#ffffff" stroke-width="2.5"/>
-    <path d="M15 9 h6 v6 h6 v6 h-6 v6 h-6 v-6 h-6 v-6 h6 Z" fill="#ffffff"/>
-  </svg>`;
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: getSize(s, s),
-    anchor: getPoint(s / 2, s / 2),
-  };
+  const html = `<div style="transform:translate(-50%, -50%);cursor:pointer;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="${s}" height="${s}">
+      <circle cx="18" cy="18" r="16" fill="#2563eb" stroke="#ffffff" stroke-width="2.5"/>
+      <path d="M15 9 h6 v6 h6 v6 h-6 v6 h-6 v-6 h-6 v-6 h6 Z" fill="#ffffff"/>
+    </svg>
+  </div>`;
+  return L.divIcon({
+    className: 'custom-dispatched-marker',
+    html,
+    iconSize: [0, 0],
+  });
 };
 
 // 3. STANDBY VEHICLE (Emerald green circle with white ready dot)
-const createStandbyIcon = (isSelected: boolean) => {
+const createStandbyLeafletIcon = (isSelected: boolean) => {
   const s = isSelected ? 34 : 28;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="${s}" height="${s}">
-    <circle cx="16" cy="16" r="14" fill="#059669" stroke="#ffffff" stroke-width="2.5"/>
-    <circle cx="16" cy="16" r="6" fill="#ffffff"/>
-  </svg>`;
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: getSize(s, s),
-    anchor: getPoint(s / 2, s / 2),
-  };
+  const html = `<div style="transform:translate(-50%, -50%);cursor:pointer;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="${s}" height="${s}">
+      <circle cx="16" cy="16" r="14" fill="#059669" stroke="#ffffff" stroke-width="2.5"/>
+      <circle cx="16" cy="16" r="6" fill="#ffffff"/>
+    </svg>
+  </div>`;
+  return L.divIcon({
+    className: 'custom-standby-marker',
+    html,
+    iconSize: [0, 0],
+  });
 };
 
 // 4. ROUTE ETA BADGE (Midpoint pill on route path)
-const createEtaBadgeIcon = (etaMinutes: number, isSelected: boolean) => {
+const createEtaBadgeLeafletIcon = (etaMinutes: number, isSelected: boolean) => {
   const label = `${Math.round(etaMinutes)}m ETA`;
-  const w = 58;
-  const h = 22;
+  const w = 62;
+  const h = 24;
   const bg = isSelected ? '#1d4ed8' : '#0f172a';
   const stroke = isSelected ? '#93c5fd' : '#3b82f6';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
-    <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="10" fill="${bg}" stroke="${stroke}" stroke-width="1.5"/>
-    <text x="${w / 2}" y="15" font-family="Arial, sans-serif" font-weight="bold" font-size="10" fill="#ffffff" text-anchor="middle">${label}</text>
-  </svg>`;
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: getSize(w, h),
-    anchor: getPoint(w / 2, h / 2),
-  };
+  const html = `<div style="transform:translate(-50%, -50%);cursor:pointer;">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+      <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="10" fill="${bg}" stroke="${stroke}" stroke-width="1.5"/>
+      <text x="${w / 2}" y="16" font-family="Arial, sans-serif" font-weight="bold" font-size="10" fill="#ffffff" text-anchor="middle">${label}</text>
+    </svg>
+  </div>`;
+  return L.divIcon({
+    className: 'custom-eta-marker',
+    html,
+    iconSize: [0, 0],
+  });
 };
 
+const DEFAULT_INCIDENTS: Incident[] = [
+  {
+    id: "INC-A",
+    type: "Road Accident",
+    severity: 4,
+    urgency: "HIGH",
+    people_affected: 3,
+    latitude: 12.9716,
+    longitude: 77.5946,
+    location_text: "MG Road, Bangalore",
+    required_resources: ["AMBULANCE", "POLICE_UNIT"],
+    status: "ACTIVE",
+    priority_score: 85,
+    assigned_resources: []
+  },
+  {
+    id: "INC-B",
+    type: "Structure Fire",
+    severity: 5,
+    urgency: "CRITICAL",
+    people_affected: 12,
+    latitude: 12.9815,
+    longitude: 77.6001,
+    location_text: "Brigade Road Commercial Complex",
+    required_resources: ["FIRE_TRUCK", "AMBULANCE", "POLICE_UNIT"],
+    status: "ACTIVE",
+    priority_score: 98,
+    assigned_resources: []
+  },
+  {
+    id: "INC-C",
+    type: "Medical Emergency",
+    severity: 3,
+    urgency: "MEDIUM",
+    people_affected: 1,
+    latitude: 12.9650,
+    longitude: 77.5850,
+    location_text: "Richmond Town Circle",
+    required_resources: ["AMBULANCE"],
+    status: "ACTIVE",
+    priority_score: 62,
+    assigned_resources: []
+  }
+];
+
+const DEFAULT_RESOURCES: EmergencyResource[] = [
+  { id: "A1", name: "Ambulance Alpha-1", type: "AMBULANCE", latitude: 12.9750, longitude: 77.5900, capacity: 2, capabilities: ["BLS", "ALS"], status: "ASSIGNED", current_incident_id: "INC-A" },
+  { id: "A2", name: "Ambulance Alpha-2", type: "AMBULANCE", latitude: 12.9680, longitude: 77.6020, capacity: 2, capabilities: ["BLS"], status: "AVAILABLE", current_incident_id: null },
+  { id: "F1", name: "Fire Truck Engine-1", type: "FIRE_TRUCK", latitude: 12.9840, longitude: 77.5980, capacity: 4, capabilities: ["WATER_PUMP"], status: "ASSIGNED", current_incident_id: "INC-B" },
+  { id: "P1", name: "Police Patrol Cruiser-1", type: "POLICE_UNIT", latitude: 12.9700, longitude: 77.5920, capacity: 3, capabilities: ["ESCORT"], status: "ASSIGNED", current_incident_id: "INC-A" },
+  { id: "P2", name: "Police Patrol Cruiser-2", type: "POLICE_UNIT", latitude: 12.9830, longitude: 77.6050, capacity: 3, capabilities: ["TRAFFIC"], status: "AVAILABLE", current_incident_id: null }
+];
+
 export default function Command() {
-  const { data: incidents } = useIncidents();
-  const { data: resources } = useResources();
+  const { data: serverIncidents } = useIncidents();
+  const { data: serverResources } = useResources();
+  const incidents = (serverIncidents && serverIncidents.length > 0) ? serverIncidents : DEFAULT_INCIDENTS;
+  const resources = (serverResources && serverResources.length > 0) ? serverResources : DEFAULT_RESOURCES;
   const { data: planData } = useCurrentPlan();
   const [showPlan, setShowPlan] = useState(true);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
@@ -766,34 +823,41 @@ export default function Command() {
             </div>
           )}
 
-          {/* Google Maps View */}
-          <div className="w-full h-full">
-            <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}>
-              <Map 
-                defaultCenter={defaultCenter}
-                center={mapCenter || defaultCenter}
-                defaultZoom={13} 
-                mapId="crisis-map"
-                className="w-full h-full"
-                disableDefaultUI={true}
-              >
-                {/* 1. DISPATCHED ROUTES (Polylines connecting vehicles to incidents) */}
-                {routes.map(r => {
-                  const isSelected = selectedIncidentId === r.incidentId || selectedResourceId === r.resourceId;
-                  return (
-                    <React.Fragment key={`route-${r.id}`}>
-                      <Polyline
-                        path={r.path}
-                        strokeColor={isSelected ? '#38bdf8' : '#2563eb'}
-                        strokeOpacity={isSelected ? 1.0 : 0.85}
-                        strokeWeight={isSelected ? 6 : 4}
-                      />
-                      {/* Midpoint ETA Badge */}
-                      <Marker
-                        position={r.midpoint}
-                        icon={createEtaBadgeIcon(r.etaMinutes, isSelected)}
-                        title={`${r.resourceName} to #${r.incidentId}: ${Math.round(r.etaMinutes)}m ETA (${r.distanceKm.toFixed(1)} km)`}
-                        onClick={() => {
+          {/* Tactical Command Map View */}
+          <div className="w-full h-full relative z-0">
+            <MapContainer 
+              center={[defaultCenter.lat, defaultCenter.lng]}
+              zoom={13} 
+              zoomControl={false}
+              className="w-full h-full bg-slate-950"
+            >
+              <MapController center={mapCenter || defaultCenter} />
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution='&copy; CARTO &copy; OpenStreetMap'
+              />
+
+              {/* 1. DISPATCHED ROUTES (Polylines connecting vehicles to incidents) */}
+              {routes.map(r => {
+                const isSelected = selectedIncidentId === r.incidentId || selectedResourceId === r.resourceId;
+                const latLngs = r.path.map(p => [p.lat, p.lng] as [number, number]);
+                return (
+                  <React.Fragment key={`route-${r.id}`}>
+                    <Polyline
+                      positions={latLngs}
+                      pathOptions={{
+                        color: isSelected ? '#38bdf8' : '#2563eb',
+                        opacity: isSelected ? 1.0 : 0.85,
+                        weight: isSelected ? 6 : 4,
+                      }}
+                    />
+                    {/* Midpoint ETA Badge */}
+                    <Marker
+                      position={[r.midpoint.lat, r.midpoint.lng]}
+                      icon={createEtaBadgeLeafletIcon(r.etaMinutes, isSelected)}
+                      title={`${r.resourceName} to #${r.incidentId}: ${Math.round(r.etaMinutes)}m ETA (${r.distanceKm.toFixed(1)} km)`}
+                      eventHandlers={{
+                        click: () => {
                           setSelectedIncidentId(r.incidentId);
                           setSelectedResourceId(r.resourceId);
                           setActiveInfoWindow({
@@ -807,145 +871,157 @@ export default function Command() {
                             },
                             position: r.midpoint,
                           });
-                        }}
-                      />
-                    </React.Fragment>
-                  );
-                })}
-
-                {/* 2. INCIDENTS (Red pins with severity tag) */}
-                {activeIncidents.map(inc => {
-                  const isSelected = selectedIncidentId === inc.id;
-                  return (
-                    <Marker 
-                      key={`inc-${inc.id}`} 
-                      position={{ lat: inc.latitude, lng: inc.longitude }} 
-                      icon={createIncidentIcon(inc.severity, isSelected)}
-                      title={`#${inc.id} - ${inc.type} (Severity: S${inc.severity})`}
-                      onClick={() => handleFocusIncident(inc)}
+                        }
+                      }}
                     />
-                  );
-                })}
+                  </React.Fragment>
+                );
+              })}
 
-                {/* 3. DISPATCHED VEHICLES (Blue circle markers) */}
-                {resources?.filter(r => r.status === 'ASSIGNED').map(res => {
-                  const isSelected = selectedResourceId === res.id;
-                  return (
-                    <Marker 
-                      key={`res-dispatched-${res.id}`} 
-                      position={{ lat: res.latitude, lng: res.longitude }} 
-                      icon={createDispatchedIcon(isSelected)}
-                      title={`${res.name} (Dispatched & En Route)`}
-                      onClick={() => handleFocusResource(res)}
-                    />
-                  );
-                })}
+              {/* 2. INCIDENTS (Red pins with severity tag) */}
+              {activeIncidents.map(inc => {
+                const isSelected = selectedIncidentId === inc.id;
+                return (
+                  <Marker 
+                    key={`inc-${inc.id}`} 
+                    position={[inc.latitude, inc.longitude]} 
+                    icon={createIncidentLeafletIcon(inc.severity, isSelected)}
+                    title={`#${inc.id} - ${inc.type} (Severity: S${inc.severity})`}
+                    eventHandlers={{
+                      click: () => handleFocusIncident(inc)
+                    }}
+                  />
+                );
+              })}
 
-                {/* 4. STANDBY VEHICLES (Emerald green circle markers) */}
-                {resources?.filter(r => r.status === 'AVAILABLE').map(res => {
-                  const isSelected = selectedResourceId === res.id;
-                  return (
-                    <Marker 
-                      key={`res-standby-${res.id}`} 
-                      position={{ lat: res.latitude, lng: res.longitude }} 
-                      icon={createStandbyIcon(isSelected)}
-                      title={`${res.name} (Standby Ready)`}
-                      onClick={() => handleFocusResource(res)}
-                    />
-                  );
-                })}
+              {/* 3. DISPATCHED VEHICLES (Blue circle markers) */}
+              {resources?.filter(r => r.status === 'ASSIGNED').map(res => {
+                const isSelected = selectedResourceId === res.id;
+                return (
+                  <Marker 
+                    key={`res-dispatched-${res.id}`} 
+                    position={[res.latitude, res.longitude]} 
+                    icon={createDispatchedLeafletIcon(isSelected)}
+                    title={`${res.name} (Dispatched & En Route)`}
+                    eventHandlers={{
+                      click: () => handleFocusResource(res)
+                    }}
+                  />
+                );
+              })}
 
-                {/* 5. INTERACTIVE INFOWINDOW */}
-                {activeInfoWindow && (
-                  <InfoWindow
-                    position={activeInfoWindow.position}
-                    onCloseClick={() => setActiveInfoWindow(null)}
+              {/* 4. STANDBY VEHICLES (Emerald green circle markers) */}
+              {resources?.filter(r => r.status === 'AVAILABLE').map(res => {
+                const isSelected = selectedResourceId === res.id;
+                return (
+                  <Marker 
+                    key={`res-standby-${res.id}`} 
+                    position={[res.latitude, res.longitude]} 
+                    icon={createStandbyLeafletIcon(isSelected)}
+                    title={`${res.name} (Standby Ready)`}
+                    eventHandlers={{
+                      click: () => handleFocusResource(res)
+                    }}
+                  />
+                );
+              })}
+            </MapContainer>
+
+            {/* In-Map Tactical Glassmorphism HUD Card for Selection */}
+            {activeInfoWindow && (
+              <div className="absolute top-4 right-4 z-20 w-80 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl p-3.5 shadow-2xl text-xs text-slate-200 pointer-events-auto">
+                <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-800">
+                  <span className="font-mono text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Tactical HUD Inspect
+                  </span>
+                  <button 
+                    onClick={() => setActiveInfoWindow(null)}
+                    className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
                   >
-                    <div className="p-2 text-slate-900 text-xs max-w-xs font-sans">
-                      {activeInfoWindow.type === 'incident' && (
-                        <div>
-                          <div className="flex items-center justify-between font-bold mb-1">
-                            <span>#{activeInfoWindow.data.id} &middot; {activeInfoWindow.data.type}</span>
-                            <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px]">
-                              S{activeInfoWindow.data.severity}
-                            </span>
-                          </div>
-                          <p className="text-slate-600 mb-1">{activeInfoWindow.data.location_text || `${activeInfoWindow.data.latitude.toFixed(3)}, ${activeInfoWindow.data.longitude.toFixed(3)}`}</p>
-                          <p className="text-slate-700 font-medium">{activeInfoWindow.data.people_affected} civilians affected</p>
-                          
-                          {/* Dispatched vehicles list for this incident */}
-                          {routes.filter(r => r.incidentId === activeInfoWindow.data.id).length > 0 ? (
-                            <div className="mt-2 pt-1.5 border-t border-slate-200">
-                              <span className="font-semibold text-slate-800 block text-[11px] mb-1">Assigned En Route:</span>
-                              {routes.filter(r => r.incidentId === activeInfoWindow.data.id).map(r => (
-                                <div key={r.id} className="text-blue-700 bg-blue-50/80 px-2 py-1 rounded border border-blue-200 flex justify-between font-mono text-[11px] mb-1">
-                                  <span className="font-bold">{r.resourceName}</span>
-                                  <span>{Math.round(r.etaMinutes)}m ETA ({r.distanceKm.toFixed(1)} km)</span>
-                                </div>
-                              ))}
-                              <button
-                                onClick={() => setDemonstrationIncidentId(activeInfoWindow.data.id)}
-                                className="mt-1.5 w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
-                              >
-                                <span>💡 Why This Unit & Not Others?</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="mt-2 pt-1.5 border-t border-slate-200">
-                              <button
-                                onClick={() => setDemonstrationIncidentId(activeInfoWindow.data.id)}
-                                className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                              >
-                                <span>💡 View Allocation Trade-offs</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
 
-                      {activeInfoWindow.type === 'dispatched' && (
-                        <div>
-                          <div className="font-bold text-blue-700 mb-1 flex items-center justify-between">
-                            <span>{activeInfoWindow.data.name}</span>
-                            <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">DISPATCHED</span>
-                          </div>
-                          <p className="text-slate-700 mb-1">
-                            En route to <span className="font-mono font-bold">#{activeInfoWindow.data.current_incident_id}</span>
-                          </p>
-                          {activeInfoWindow.data.eta_minutes != null && (
-                            <p className="text-blue-600 font-semibold mb-2">
-                              ETA: ~{Math.round(activeInfoWindow.data.eta_minutes)} minutes ({activeInfoWindow.data.distance_km?.toFixed(1)} km)
-                            </p>
-                          )}
-                          {activeInfoWindow.data.current_incident_id && (
-                            <button
-                              onClick={() => setDemonstrationIncidentId(activeInfoWindow.data.current_incident_id)}
-                              className="w-full py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
-                            >
-                              <span>💡 Why Chosen for this Scene?</span>
-                              <ArrowRight className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {activeInfoWindow.type === 'standby' && (
-                        <div>
-                          <div className="font-bold text-emerald-700 mb-1 flex items-center justify-between">
-                            <span>{activeInfoWindow.data.name}</span>
-                            <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px]">STANDBY</span>
-                          </div>
-                          <p className="text-slate-600 mb-1">Type: {activeInfoWindow.data.type?.replace(/_/g, ' ')}</p>
-                          <p className="text-emerald-700 font-medium">Ready at station for immediate emergency dispatch</p>
-                        </div>
-                      )}
+                {activeInfoWindow.type === 'incident' && (
+                  <div>
+                    <div className="flex items-center justify-between font-bold text-slate-100 mb-1">
+                      <span>#{activeInfoWindow.data.id} &middot; {activeInfoWindow.data.type}</span>
+                      <span className="bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded text-[10px]">
+                        S{activeInfoWindow.data.severity}
+                      </span>
                     </div>
-                  </InfoWindow>
+                    <p className="text-slate-400 mb-1.5">{activeInfoWindow.data.location_text || `${activeInfoWindow.data.latitude.toFixed(3)}, ${activeInfoWindow.data.longitude.toFixed(3)}`}</p>
+                    <p className="text-slate-300 font-medium mb-2">{activeInfoWindow.data.people_affected} civilians affected</p>
+                    
+                    {routes.filter(r => r.incidentId === activeInfoWindow.data.id).length > 0 ? (
+                      <div className="pt-2 border-t border-slate-800 space-y-1.5">
+                        <span className="font-semibold text-slate-300 block text-[11px]">Assigned En Route:</span>
+                        {routes.filter(r => r.incidentId === activeInfoWindow.data.id).map(r => (
+                          <div key={r.id} className="text-blue-300 bg-blue-950/60 px-2 py-1 rounded border border-blue-500/30 flex justify-between font-mono text-[11px]">
+                            <span className="font-bold">{r.resourceName}</span>
+                            <span>{Math.round(r.etaMinutes)}m ETA ({r.distanceKm.toFixed(1)} km)</span>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setDemonstrationIncidentId(activeInfoWindow.data.id)}
+                          className="mt-2 w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
+                        >
+                          <span>💡 Why This Unit & Not Others?</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="pt-2 border-t border-slate-800">
+                        <button
+                          onClick={() => setDemonstrationIncidentId(activeInfoWindow.data.id)}
+                          className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                        >
+                          <span>💡 View Allocation Trade-offs</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </Map>
-            </APIProvider>
+
+                {activeInfoWindow.type === 'dispatched' && (
+                  <div>
+                    <div className="font-bold text-blue-400 mb-1 flex items-center justify-between">
+                      <span>{activeInfoWindow.data.name}</span>
+                      <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded text-[10px]">DISPATCHED</span>
+                    </div>
+                    <p className="text-slate-300 mb-1">
+                      En route to <span className="font-mono font-bold text-blue-300">#{activeInfoWindow.data.current_incident_id}</span>
+                    </p>
+                    {activeInfoWindow.data.eta_minutes != null && (
+                      <p className="text-blue-400 font-semibold mb-2">
+                        ETA: ~{Math.round(activeInfoWindow.data.eta_minutes)} minutes ({activeInfoWindow.data.distance_km?.toFixed(1)} km)
+                      </p>
+                    )}
+                    {activeInfoWindow.data.current_incident_id && (
+                      <button
+                        onClick={() => setDemonstrationIncidentId(activeInfoWindow.data.current_incident_id)}
+                        className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                      >
+                        <span>💡 Why Chosen for this Scene?</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {activeInfoWindow.type === 'standby' && (
+                  <div>
+                    <div className="font-bold text-emerald-400 mb-1 flex items-center justify-between">
+                      <span>{activeInfoWindow.data.name}</span>
+                      <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px]">STANDBY</span>
+                    </div>
+                    <p className="text-slate-400 mb-1">Type: {activeInfoWindow.data.type?.replace(/_/g, ' ')}</p>
+                    <p className="text-emerald-400 font-medium">Ready at station for immediate emergency dispatch</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

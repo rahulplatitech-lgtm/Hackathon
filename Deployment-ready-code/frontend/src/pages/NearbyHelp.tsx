@@ -4,27 +4,105 @@ import {
   ArrowLeft, Search, MapPin, Phone, Navigation, Heart, Shield, 
   Clock, Plus, CheckCircle2, AlertTriangle, Building2, Truck
 } from 'lucide-react';
-import { APIProvider, Map, Marker, InfoWindow } from '@vis.gl/react-google-maps';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import { useQuery } from '@tanstack/react-query';
 import { getEmergencyOutlets } from '../lib/api/passerby';
 import type { EmergencyOutlet } from '../types';
 
 const CATEGORIES = ['All', 'Hospital', 'Ambulance', 'AED', 'Police', 'Pharmacy'];
 
+const DEFAULT_OUTLETS: EmergencyOutlet[] = [
+  {
+    id: "OUT-H1",
+    name: "Central Emergency Hospital",
+    type: "HOSPITAL",
+    area: "Connaught Place / MG Road",
+    latitude: 12.9771,
+    longitude: 77.5981,
+    distance_km: 0.8,
+    eta_minutes: 3,
+    phone: "+91 11 2334 0000",
+    is_open_24_7: true,
+    capabilities: ["24/7 Trauma ICU", "Emergency OT", "Burn Ward", "Blood Bank"]
+  },
+  {
+    id: "OUT-A1",
+    name: "Barakhamba Ambulance Response Point",
+    type: "AMBULANCE",
+    area: "Barakhamba Road area",
+    latitude: 12.9676,
+    longitude: 77.6006,
+    distance_km: 1.2,
+    eta_minutes: 4,
+    phone: "108",
+    is_open_24_7: true,
+    capabilities: ["Advanced Life Support (ALS)", "Oxygen Ventilator", "Defibrillator"]
+  },
+  {
+    id: "OUT-AED1",
+    name: "Metro Station AED & Cardiac Kiosk",
+    type: "AED",
+    area: "Janpath Metro Concourse",
+    latitude: 12.9741,
+    longitude: 77.5921,
+    distance_km: 0.4,
+    eta_minutes: 2,
+    phone: "112",
+    is_open_24_7: true,
+    capabilities: ["Automated External Defibrillator", "First Aid Kit", "Emergency Push Button"]
+  },
+  {
+    id: "OUT-P1",
+    name: "Mandi House Rapid Police Post",
+    type: "POLICE",
+    area: "Mandi House Roundabout",
+    latitude: 12.9786,
+    longitude: 77.5911,
+    distance_km: 0.9,
+    eta_minutes: 3,
+    phone: "100",
+    is_open_24_7: true,
+    capabilities: ["Highway Patrol", "Traffic Clearance", "Emergency Escort"]
+  },
+  {
+    id: "OUT-PH1",
+    name: "Apollo 24/7 Trauma Pharmacy",
+    type: "PHARMACY",
+    area: "Bengali Market Circle",
+    latitude: 12.9696,
+    longitude: 77.5966,
+    distance_km: 0.7,
+    eta_minutes: 2,
+    phone: "+91 11 2371 1111",
+    is_open_24_7: true,
+    capabilities: ["Critical Injectables", "Anti-Venom", "Burn Dressings", "Oxygen Cylinders"]
+  }
+];
+
+function MapController({ center }: { center: { lat: number; lng: number } }) {
+  const map = useMap();
+  React.useEffect(() => {
+    map.setView([center.lat, center.lng], 14);
+  }, [center, map]);
+  return null;
+}
+
 // Custom SVG map icons matching Image 5
 const getOutletMapIcon = (type: string) => {
   let color = '#dc2626'; // red
-  let symbol = 'H';
+  let symbol = '🏥';
   if (type === 'AMBULANCE') { color = '#059669'; symbol = '🚑'; }
   else if (type === 'AED') { color = '#d97706'; symbol = '❤️'; }
   else if (type === 'POLICE') { color = '#2563eb'; symbol = '🛡️'; }
   else if (type === 'PHARMACY') { color = '#7c3aed'; symbol = '💊'; }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="34" height="34">
-    <rect x="2" y="2" width="32" height="32" rx="10" fill="#ffffff" stroke="${color}" stroke-width="2.5"/>
-    <text x="18" y="22" font-size="14" text-anchor="middle">${symbol}</text>
-  </svg>`;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  return L.divIcon({
+    className: 'custom-outlet-marker',
+    html: `<div style="width:34px;height:34px;background:#ffffff;border:2.5px solid ${color};border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,0.2);font-size:15px;cursor:pointer;">${symbol}</div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  });
 };
 
 export default function NearbyHelp() {
@@ -33,10 +111,12 @@ export default function NearbyHelp() {
   const [selectedOutlet, setSelectedOutlet] = useState<EmergencyOutlet | null>(null);
   const [callModal, setCallModal] = useState<EmergencyOutlet | null>(null);
 
-  const { data: outlets = [], isLoading } = useQuery({
+  const { data: serverOutlets = [] } = useQuery({
     queryKey: ['emergencyOutlets'],
     queryFn: () => getEmergencyOutlets(12.9716, 77.5946),
   });
+
+  const outlets = (serverOutlets && serverOutlets.length > 0) ? serverOutlets : DEFAULT_OUTLETS;
 
   const filteredOutlets = useMemo(() => {
     return outlets.filter(item => {
@@ -144,49 +224,47 @@ export default function NearbyHelp() {
         </div>
 
         {/* Interactive Map Box */}
-        <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm h-72 sm:h-80 mb-8">
-          <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}>
-            <Map
-              center={mapCenter}
-              zoom={14}
-              mapId="DEMO_MAP_ID"
-              disableDefaultUI={true}
-              zoomControl={true}
-              className="w-full h-full"
-            >
-              {filteredOutlets.map(outlet => (
-                <Marker
-                  key={outlet.id}
-                  position={{ lat: outlet.latitude, lng: outlet.longitude }}
-                  title={outlet.name}
-                  icon={getOutletMapIcon(outlet.type)}
-                  onClick={() => setSelectedOutlet(outlet)}
-                />
-              ))}
-
-              {selectedOutlet && (
-                <InfoWindow
-                  position={{ lat: selectedOutlet.latitude, lng: selectedOutlet.longitude }}
-                  onCloseClick={() => setSelectedOutlet(null)}
-                >
-                  <div className="p-2 text-xs max-w-xs text-slate-800">
-                    <div className="font-bold text-sm text-slate-900">{selectedOutlet.name}</div>
-                    <div className="text-slate-500 text-[11px] mb-1.5">{selectedOutlet.area}</div>
+        <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm h-72 sm:h-80 mb-8 z-0">
+          <MapContainer
+            center={[mapCenter.lat, mapCenter.lng]}
+            zoom={14}
+            zoomControl={true}
+            className="w-full h-full"
+          >
+            <MapController center={mapCenter} />
+            <TileLayer
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              attribution='&copy; CARTO &copy; OpenStreetMap'
+            />
+            {filteredOutlets.map(outlet => (
+              <Marker
+                key={outlet.id}
+                position={[outlet.latitude, outlet.longitude]}
+                title={outlet.name}
+                icon={getOutletMapIcon(outlet.type)}
+                eventHandlers={{
+                  click: () => setSelectedOutlet(outlet),
+                }}
+              >
+                <Popup>
+                  <div className="p-1 text-xs max-w-xs text-slate-800">
+                    <div className="font-bold text-sm text-slate-900">{outlet.name}</div>
+                    <div className="text-slate-500 text-[11px] mb-1.5">{outlet.area}</div>
                     <div className="flex items-center justify-between text-[11px] font-medium text-slate-700 mb-2">
-                      <span>{selectedOutlet.distance_km} km</span>
-                      <span className="text-emerald-600">~{selectedOutlet.eta_minutes} min ETA</span>
+                      <span>{outlet.distance_km} km</span>
+                      <span className="text-emerald-600 font-bold">~{outlet.eta_minutes} min ETA</span>
                     </div>
                     <button
-                      onClick={() => setCallModal(selectedOutlet)}
-                      className="w-full py-1 bg-red-600 hover:bg-red-700 text-white font-medium rounded text-center transition"
+                      onClick={() => setCallModal(outlet)}
+                      className="w-full py-1 px-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded text-center transition"
                     >
-                      Call {selectedOutlet.phone}
+                      Call {outlet.phone}
                     </button>
                   </div>
-                </InfoWindow>
-              )}
-            </Map>
-          </APIProvider>
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
 
           {/* Floating Map Overlay Label */}
           <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs flex items-center gap-2">

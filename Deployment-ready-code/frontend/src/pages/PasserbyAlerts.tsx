@@ -4,15 +4,108 @@ import {
   ArrowLeft, Bell, Radio, MapPin, Users, ShieldAlert, Heart, CheckCircle2, 
   Smartphone, Send, AlertTriangle, Flame, Activity, PhoneCall, RefreshCw, Eye
 } from 'lucide-react';
-import { APIProvider, Map, Marker, Circle, InfoWindow } from '@vis.gl/react-google-maps';
+import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getNearbyPasserby, broadcastPasserbyAlert } from '../lib/api/passerby';
 import { useIncidents } from '../hooks/useIncidents';
 import type { PasserbyCitizen, PasserbyBroadcast } from '../types';
 
+function MapController({ center }: { center: { lat: number; lng: number } }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([center.lat, center.lng], 17);
+  }, [center, map]);
+  return null;
+}
+
+const incidentLeafletIcon = L.divIcon({
+  className: 'custom-incident-pin',
+  html: `<div style="width:34px;height:34px;border-radius:50%;background:#dc2626;border:3px solid #ffffff;box-shadow:0 0 14px rgba(220,38,38,0.8);display:flex;align-items:center;justify-content:center;font-size:16px;">🚨</div>`,
+  iconSize: [34, 34],
+  iconAnchor: [17, 17],
+});
+
+const getCitizenLeafletIcon = (isInside: boolean, hasFirstAid: boolean) => {
+  const bg = isInside ? (hasFirstAid ? '#059669' : '#10b981') : '#94a3b8';
+  const symbol = hasFirstAid ? '🩹' : '👤';
+  return L.divIcon({
+    className: 'custom-citizen-pin',
+    html: `<div style="width:28px;height:28px;border-radius:50%;background:${bg};border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;">${symbol}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+};
+
+const DEFAULT_PASSBY_CITIZENS: PasserbyCitizen[] = [
+  {
+    id: "CIT-01",
+    name: "Aarav Sharma",
+    latitude: 12.97205,
+    longitude: 77.59485,
+    distance_meters: 57.2,
+    is_within_100m: true,
+    skill: "CPR & Basic Life Support",
+    phone_masked: "+91 98*** **411",
+    status: "ALERT_READY",
+    has_first_aid_kit: true
+  },
+  {
+    id: "CIT-02",
+    name: "Dr. Priya Patel",
+    latitude: 12.97125,
+    longitude: 77.59515,
+    distance_meters: 72.8,
+    is_within_100m: true,
+    skill: "Off-Duty Emergency Physician",
+    phone_masked: "+91 97*** **890",
+    status: "ALERT_READY",
+    has_first_aid_kit: true
+  },
+  {
+    id: "CIT-03",
+    name: "Vikram Sen",
+    latitude: 12.97188,
+    longitude: 77.59422,
+    distance_meters: 51.6,
+    is_within_100m: true,
+    skill: "Civil Defense Volunteer",
+    phone_masked: "+91 99*** **120",
+    status: "ALERT_READY",
+    has_first_aid_kit: true
+  },
+  {
+    id: "CIT-04",
+    name: "Ananya Nair",
+    latitude: 12.97095,
+    longitude: 77.59410,
+    distance_meters: 91.4,
+    is_within_100m: true,
+    skill: "Registered Nurse",
+    phone_masked: "+91 91*** **654",
+    status: "ALERT_READY",
+    has_first_aid_kit: false
+  },
+  {
+    id: "CIT-05",
+    name: "Rohan Mehra",
+    latitude: 12.97230,
+    longitude: 77.59390,
+    distance_meters: 108.5,
+    is_within_100m: false,
+    skill: "Pedestrian / Roadway Clearance",
+    phone_masked: "+91 93*** **219",
+    status: "OUTSIDE_RADIUS",
+    has_first_aid_kit: false
+  }
+];
+
 export default function PasserbyAlerts() {
   const qc = useQueryClient();
-  const { data: incidents = [] } = useIncidents();
+  const { data: serverIncidents = [] } = useIncidents();
+  const incidents = serverIncidents.length > 0 ? serverIncidents : [
+    { id: 'INC-A', type: 'Road Accident', severity: 4, latitude: 12.9716, longitude: 77.5946, people_affected: 3 }
+  ];
   
   // Center location (Connaught Place / Bangalore active scene)
   const [centerLat, setCenterLat] = useState<number>(12.9716);
@@ -34,10 +127,12 @@ export default function PasserbyAlerts() {
   }, [selectedIncidentId, incidents]);
 
   // Query nearby passerby
-  const { data: passerby = [], refetch } = useQuery({
+  const { data: serverPasserby = [], refetch } = useQuery({
     queryKey: ['passerby', centerLat, centerLng, radiusMeters],
     queryFn: () => getNearbyPasserby(centerLat, centerLng, radiusMeters),
   });
+
+  const passerby = serverPasserby.length > 0 ? serverPasserby : DEFAULT_PASSBY_CITIZENS;
 
   // Broadcast mutation
   const broadcastMut = useMutation({
@@ -149,72 +244,75 @@ export default function PasserbyAlerts() {
               </div>
 
               {/* Map Canvas */}
-              <div className="relative h-[380px] w-full bg-slate-100">
-                <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}>
-                  <Map
-                    center={{ lat: centerLat, lng: centerLng }}
-                    zoom={17}
-                    mapId="DEMO_MAP_ID"
-                    disableDefaultUI={true}
-                    zoomControl={true}
-                    className="w-full h-full"
+              <div className="relative h-[380px] w-full bg-slate-100 z-0">
+                <MapContainer
+                  center={[centerLat, centerLng]}
+                  zoom={17}
+                  zoomControl={true}
+                  className="w-full h-full"
+                >
+                  <MapController center={{ lat: centerLat, lng: centerLng }} />
+                  <TileLayer
+                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; CARTO &copy; OpenStreetMap'
+                  />
+
+                  {/* Center Emergency Incident Marker */}
+                  <Marker
+                    position={[centerLat, centerLng]}
+                    title="Emergency Incident Center"
+                    icon={incidentLeafletIcon}
                   >
-                    {/* Center Emergency Incident Marker */}
-                    <Marker
-                      position={{ lat: centerLat, lng: centerLng }}
-                      title="Emergency Incident Center"
-                    />
+                    <Popup>
+                      <div className="p-1 text-xs">
+                        <div className="font-bold text-red-600">Incident Epicenter (#{selectedIncidentId})</div>
+                        <div className="text-slate-600 text-[11px]">100m Active Response Geofence</div>
+                      </div>
+                    </Popup>
+                  </Marker>
 
-                    {/* 100m Geofence Perimeter Circle */}
-                    <Circle
-                      center={{ lat: centerLat, lng: centerLng }}
-                      radius={radiusMeters}
-                      fillColor="#f43f5e"
-                      fillOpacity={0.12}
-                      strokeColor="#e11d48"
-                      strokeOpacity={0.8}
-                      strokeWeight={2}
-                    />
+                  {/* 100m Geofence Perimeter Circle */}
+                  <Circle
+                    center={[centerLat, centerLng]}
+                    radius={radiusMeters}
+                    pathOptions={{
+                      fillColor: '#f43f5e',
+                      fillOpacity: 0.15,
+                      color: '#e11d48',
+                      opacity: 0.8,
+                      weight: 2,
+                    }}
+                  />
 
-                    {/* Passerby Markers */}
-                    {passerby.map(c => {
-                      const isInside = c.distance_meters <= radiusMeters;
-                      const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="26" height="26">
-                        <circle cx="14" cy="14" r="12" fill="${isInside ? '#10b981' : '#94a3b8'}" stroke="#ffffff" stroke-width="2.5"/>
-                        <circle cx="14" cy="14" r="4" fill="#ffffff"/>
-                      </svg>`;
-                      const iconUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(iconSvg)}`;
-
-                      return (
-                        <Marker
-                          key={c.id}
-                          position={{ lat: c.latitude, lng: c.longitude }}
-                          title={`${c.name} (${c.distance_meters}m away)`}
-                          icon={{ url: iconUrl }}
-                          onClick={() => setSelectedCitizen(c)}
-                        />
-                      );
-                    })}
-
-                    {selectedCitizen && (
-                      <InfoWindow
-                        position={{ lat: selectedCitizen.latitude, lng: selectedCitizen.longitude }}
-                        onCloseClick={() => setSelectedCitizen(null)}
+                  {/* Passerby Markers */}
+                  {passerby.map(c => {
+                    const isInside = c.distance_meters <= radiusMeters;
+                    return (
+                      <Marker
+                        key={c.id}
+                        position={[c.latitude, c.longitude]}
+                        title={`${c.name} (${c.distance_meters}m away)`}
+                        icon={getCitizenLeafletIcon(isInside, c.has_first_aid_kit)}
+                        eventHandlers={{
+                          click: () => setSelectedCitizen(c),
+                        }}
                       >
-                        <div className="p-2 text-xs text-slate-800 max-w-xs">
-                          <div className="font-bold text-sm text-slate-900">{selectedCitizen.name}</div>
-                          <div className="text-slate-500 text-[11px] mb-1">{selectedCitizen.phone_masked}</div>
-                          <div className="text-rose-600 font-bold mb-1">
-                            {selectedCitizen.distance_meters}m away {selectedCitizen.distance_meters <= radiusMeters ? '(Inside 100m)' : '(Outside)'}
+                        <Popup>
+                          <div className="p-1 text-xs text-slate-800 max-w-xs">
+                            <div className="font-bold text-sm text-slate-900">{c.name}</div>
+                            <div className="text-slate-500 text-[11px] mb-1">{c.phone_masked}</div>
+                            <div className="text-rose-600 font-bold mb-1">
+                              {c.distance_meters}m away {isInside ? '(Inside 100m)' : '(Outside)'}
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded p-1.5 text-[11px]">
+                              <strong>Skill:</strong> {c.skill}
+                            </div>
                           </div>
-                          <div className="bg-slate-50 border border-slate-200 rounded p-1.5 text-[11px]">
-                            <strong>Skill:</strong> {selectedCitizen.skill}
-                          </div>
-                        </div>
-                      </InfoWindow>
-                    )}
-                  </Map>
-                </APIProvider>
+                        </Popup>
+                      </Marker>
+                    );
+                  })}
+                </MapContainer>
 
                 {/* Floating Geofence Pill */}
                 <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-xs border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs text-xs font-semibold text-slate-700 flex items-center gap-1.5">

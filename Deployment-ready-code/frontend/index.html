@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CrisisSync AI - Emergency Response Platform</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script>
+      // Suppress Google Maps unbilled project alert dialog
+      window.gm_authFailure = function() {
+        console.warn("Google Maps API auth warning intercepted: billing is disabled on GCP project.");
+        window.__gm_auth_failed = true;
+      };
+      const _origAlert = window.alert;
+      window.alert = function(msg) {
+        if (typeof msg === 'string' && (msg.includes('Google Maps') || msg.includes('load Google Maps correctly'))) {
+          console.warn("Google Maps alert intercepted and suppressed:", msg);
+          return;
+        }
+        return _origAlert.apply(this, arguments);
+      };
+    </script>
   </head>
   <body class="bg-slate-950 text-white">
     <div id="root"></div>

@@ -5,7 +5,32 @@ import {
   Plus, Minus, Navigation, Bell, Activity, Truck, Building2, Flame,
   AlertTriangle, PhoneCall, CheckCircle2, ChevronRight, Sparkles, Mic
 } from 'lucide-react';
-import { APIProvider, Map, Marker, Circle, InfoWindow } from '@vis.gl/react-google-maps';
+import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet';
+import L from 'leaflet';
+
+function MapController({ center, zoom }: { center: { lat: number; lng: number }; zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([center.lat, center.lng], zoom);
+  }, [center, zoom, map]);
+  return null;
+}
+
+const createLeafletOutletIcon = (symbol: string, color: string) => {
+  return L.divIcon({
+    className: 'custom-outlet-marker',
+    html: `<div style="width:32px;height:32px;background:#ffffff;border:2.5px solid ${color};border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,0.18);font-size:15px;cursor:pointer;">${symbol}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+};
+
+const centerUserLeafletIcon = L.divIcon({
+  className: 'custom-center-marker',
+  html: `<div style="width:26px;height:26px;border-radius:50%;background:#2563eb;border:3px solid #ffffff;box-shadow:0 0 12px rgba(37,99,235,0.7);display:flex;align-items:center;justify-content:center;"><div style="width:8px;height:8px;border-radius:50%;background:#ffffff;"></div></div>`,
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+});
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -222,58 +247,50 @@ export default function Landing() {
             </button>
           </div>
 
-          {/* Interactive Google Map with Light Style */}
-          <div className="flex-1 w-full h-full relative">
-            <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}>
-              <Map
-                center={centerPos}
-                zoom={zoomLevel}
-                mapId="DEMO_MAP_ID"
-                disableDefaultUI={true}
-                className="w-full h-full"
-              >
-                {/* 100m Geofence Perimeter around center */}
-                <Circle
-                  center={centerPos}
-                  radius={100}
-                  fillColor="#f43f5e"
-                  fillOpacity={0.15}
-                  strokeColor="#e11d48"
-                  strokeOpacity={0.7}
-                  strokeWeight={1.5}
-                />
+          {/* Interactive Map with Light Style */}
+          <div className="flex-1 w-full h-full relative z-0">
+            <MapContainer
+              center={[centerPos.lat, centerPos.lng]}
+              zoom={zoomLevel}
+              zoomControl={false}
+              className="w-full h-full"
+            >
+              <MapController center={centerPos} zoom={zoomLevel} />
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                attribution='&copy; CARTO &copy; OpenStreetMap'
+              />
 
-                {/* Map Outlets from Image 3 */}
-                {mapOutlets.map(outlet => {
-                  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34" width="30" height="30">
-                    <rect x="2" y="2" width="30" height="30" rx="9" fill="#ffffff" stroke="${outlet.color}" stroke-width="2"/>
-                    <text x="17" y="21" font-size="13" text-anchor="middle">${outlet.symbol}</text>
-                  </svg>`;
-                  return (
-                    <Marker
-                      key={outlet.id}
-                      position={{ lat: outlet.lat, lng: outlet.lng }}
-                      title={outlet.name}
-                      icon={{ url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}` }}
-                    />
-                  );
-                })}
+              {/* 100m Geofence Perimeter around center */}
+              <Circle
+                center={[centerPos.lat, centerPos.lng]}
+                radius={100}
+                pathOptions={{
+                  fillColor: '#f43f5e',
+                  fillOpacity: 0.15,
+                  color: '#e11d48',
+                  opacity: 0.7,
+                  weight: 1.5,
+                }}
+              />
 
-                {/* Center User Location Marker */}
+              {/* Map Outlets from Image 3 */}
+              {mapOutlets.map(outlet => (
                 <Marker
-                  position={centerPos}
-                  title="Your Location / Example Center"
-                  icon={{
-                    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                        <circle cx="12" cy="12" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="3"/>
-                        <circle cx="12" cy="12" r="4" fill="#ffffff"/>
-                      </svg>
-                    `)}`
-                  }}
+                  key={outlet.id}
+                  position={[outlet.lat, outlet.lng]}
+                  title={outlet.name}
+                  icon={createLeafletOutletIcon(outlet.symbol, outlet.color)}
                 />
-              </Map>
-            </APIProvider>
+              ))}
+
+              {/* Center User Location Marker */}
+              <Marker
+                position={[centerPos.lat, centerPos.lng]}
+                title="Your Location / Example Center"
+                icon={centerUserLeafletIcon}
+              />
+            </MapContainer>
 
             {/* Road Label Landmarks from Image 3 */}
             <div className="absolute top-28 right-24 pointer-events-none text-xs font-bold text-slate-500/80 uppercase tracking-wider">
