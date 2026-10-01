@@ -74,3 +74,25 @@ async def test_chatbox_satisfaction_and_auto_transition():
     assert t2_res["dispatched"] is True
     assert "command center" in t2_res["reply"].lower() or "authorized" in t2_res["reply"].lower()
 
+@pytest.mark.asyncio
+async def test_human_operator_escalation_request():
+    history = [
+        {"role": "user", "content": "I am panic, please connect me to a human operator right now"}
+    ]
+    res = await voice_dispatcher.chat(history)
+    assert res["human_escalation_required"] is True
+    assert res["ai_confidence"] < 0.60
+    assert "human" in res["reply"].lower() or "dispatcher" in res["reply"].lower()
+    assert res["escalation_reason"] is not None
+
+@pytest.mark.asyncio
+async def test_ambiguous_distress_low_confidence_escalation():
+    history = [
+        {"role": "user", "content": "I don't know what happened, there's screaming outside and weird loud bang"}
+    ]
+    res = await voice_dispatcher.chat(history)
+    assert res["human_escalation_required"] is True
+    assert res["ai_confidence"] <= 0.50
+    assert len(res["ai_thinking"]) > 0
+    assert "uncertainty" in res["reply"].lower() or "dispatcher" in res["reply"].lower()
+

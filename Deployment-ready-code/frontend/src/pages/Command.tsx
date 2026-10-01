@@ -4,10 +4,11 @@ import { useSearchParams } from 'react-router-dom';
 import { useIncidents } from '../hooks/useIncidents';
 import { useResources } from '../hooks/useResources';
 import { useCurrentPlan } from '../hooks/useCurrentPlan';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { generatePlan, replan, approvePlan } from '../lib/api/planning';
 import { APIProvider, Map, Marker, Polyline, InfoWindow } from '@vis.gl/react-google-maps';
 import { getRoadRoute } from '../lib/api/routing';
+import { getEscalations, resolveEscalation, EscalationItem } from '../lib/api/reports';
 
 import SeverityBadge from '../components/ui/SeverityBadge';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -15,7 +16,8 @@ import ResourceIcon from '../components/ui/ResourceIcon';
 import { 
   AlertTriangle, Zap, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronUp,
   Clock, Users as UsersIcon, MapPin, Shield, Radio, RotateCcw, Truck, Navigation,
-  X, Info, HelpCircle, Check, ArrowRight, ShieldAlert, CheckCircle2
+  X, Info, HelpCircle, Check, ArrowRight, ShieldAlert, CheckCircle2,
+  Headset, AlertOctagon, Sparkles, PhoneCall
 } from 'lucide-react';
 import type { Incident, EmergencyResource, PlanDiffItem, Allocation } from '../types';
 
@@ -119,6 +121,47 @@ export default function Command() {
 
   const [searchParams] = useSearchParams();
   const incidentIdParam = searchParams.get('incidentId');
+  const escalatedParam = searchParams.get('escalated');
+  const reportIdParam = searchParams.get('reportId');
+  const [selectedEscalation, setSelectedEscalation] = useState<EscalationItem | null>(null);
+
+  // Poll active human operator escalations from backend
+  const { data: escalations = [] } = useQuery<EscalationItem[]>({
+    queryKey: ['activeEscalations'],
+    queryFn: getEscalations,
+    refetchInterval: 3000,
+  });
+
+  const qc = useQueryClient();
+
+  const resolveEscalationMut = useMutation({
+    mutationFn: ({ reportId, notes }: { reportId: string; notes?: string }) => 
+      resolveEscalation(reportId, notes),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['activeEscalations'] });
+      qc.invalidateQueries({ queryKey: ['incidents'] });
+      setSelectedEscalation(null);
+    }
+  });
+
+  // Auto-focus on escalation if transferred from emergency chatbox or voice
+  useEffect(() => {
+    if ((escalatedParam === 'true' || reportIdParam) && escalations && escalations.length > 0) {
+      if (reportIdParam) {
+        const found = escalations.find(e => e.id === reportIdParam);
+        if (found) {
+          setSelectedEscalation(found);
+          if (found.latitude && found.longitude) {
+            setMapCenter({ lat: found.latitude, lng: found.longitude });
+          }
+        } else if (escalations.length > 0) {
+          setSelectedEscalation(escalations[0]);
+        }
+      } else {
+        setSelectedEscalation(escalations[0]);
+      }
+    }
+  }, [escalatedParam, reportIdParam, escalations]);
 
   // Auto-focus on incident if transferred from the emergency chatbox
   useEffect(() => {
@@ -135,8 +178,6 @@ export default function Command() {
       }
     }
   }, [incidentIdParam, incidents]);
-
-  const qc = useQueryClient();
 
   const genPlan = useMutation({ 
     mutationFn: generatePlan, 
@@ -532,6 +573,47 @@ export default function Command() {
           </button>
         </div>
       </div>
+
+      {/* High Priority Incoming Human Escalation Bar */}
+      {escalations && escalations.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-b border-amber-500/50 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <Headset className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black tracking-wide text-amber-300 uppercase">
+                  ⚠️ AI Escalation Alert &middot; {escalations.length} Pending Human Review
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-mono">
+                  Conf: {Math.round(escalations[0].ai_confidence * 100)}%
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 line-clamp-1 max-w-2xl mt-0.5">
+                <strong className="text-amber-200">Caller:</strong> "{escalations[0].raw_text}" &mdash; <span className="text-amber-400/90">{escalations[0].escalation_reason}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setSelectedEscalation(escalations[0])}
+              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition"
+            >
+              <Headset className="w-3.5 h-3.5" />
+              <span>Take Over Incident</span>
+            </button>
+            <button
+              onClick={() => resolveEscalationMut.mutate({ reportId: escalations[0].id, notes: 'Quick resolved by Command Operator' })}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 transition"
+              title="Acknowledge and mark resolved"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Workspace */}
       <div className="flex-1 flex overflow-hidden">
@@ -1375,6 +1457,187 @@ export default function Command() {
           </div>
         );
       })()}
+
+      {/* HUMAN ESCALATION TAKEOVER MODAL */}
+      {selectedEscalation && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in duration-200">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-b border-amber-500/30 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <Headset className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white">Human Dispatcher Escalation Takeover</h3>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-mono border border-amber-500/40">
+                      ID: #{selectedEscalation.id.slice(0, 8)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-200/80">
+                    Incident requires senior dispatcher intervention due to low AI confidence or explicit caller request
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedEscalation(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-5 overflow-y-auto">
+              
+              {/* Caller Distress Statement */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <span className="flex items-center gap-1.5">
+                    <PhoneCall className="w-3.5 h-3.5 text-red-400" />
+                    Caller Verbal Intake
+                  </span>
+                  <span className="font-mono text-[11px] text-slate-500">{new Date(selectedEscalation.created_at).toLocaleTimeString()}</span>
+                </div>
+                <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-200 text-sm font-normal italic leading-relaxed">
+                  "{selectedEscalation.raw_text}"
+                </div>
+              </div>
+
+              {/* AI Diagnostics & Confidence Gauge */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Confidence</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-2xl font-black ${
+                      selectedEscalation.ai_confidence >= 0.75 
+                        ? 'text-emerald-400' 
+                        : selectedEscalation.ai_confidence >= 0.60 
+                        ? 'text-amber-400' 
+                        : 'text-red-400'
+                    }`}>
+                      {Math.round(selectedEscalation.ai_confidence * 100)}%
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {selectedEscalation.ai_confidence < 0.60 ? 'Low (Escalate)' : 'Moderate'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Category / Urgency</span>
+                  <div className="text-sm font-bold text-slate-200 truncate">
+                    {selectedEscalation.category || 'General Emergency'}
+                  </div>
+                  <div className="text-xs text-slate-400 font-mono">
+                    Urgency: {selectedEscalation.urgency || 'HIGH'}
+                  </div>
+                </div>
+
+                <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assigned Dispatcher</span>
+                  <div className="text-sm font-bold text-amber-400 truncate">
+                    {selectedEscalation.escalated_to || 'Senior Dispatcher'}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    Routing Status: Active
+                  </div>
+                </div>
+              </div>
+
+              {/* Escalation Reason */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs space-y-1 text-amber-200">
+                <span className="font-bold flex items-center gap-1.5 text-amber-300">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Escalation Trigger Reason:
+                </span>
+                <p className="leading-relaxed">
+                  {selectedEscalation.escalation_reason || 'AI triage confidence threshold not met or caller explicitly requested human operator.'}
+                </p>
+              </div>
+
+              {/* AI Thinking Explanation */}
+              {selectedEscalation.ai_thinking && (
+                <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-1.5">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    AI Model Triage Reasoning:
+                  </span>
+                  <p className="text-xs text-slate-300 font-mono leading-relaxed">
+                    {selectedEscalation.ai_thinking}
+                  </p>
+                </div>
+              )}
+
+              {/* GPS Coordinates & Resources Needed */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400 pt-1">
+                <div className="flex items-center gap-1.5 text-slate-300">
+                  <MapPin className="w-4 h-4 text-red-400 shrink-0" />
+                  <span>
+                    Location: {selectedEscalation.latitude && selectedEscalation.longitude ? `${selectedEscalation.latitude.toFixed(4)}, ${selectedEscalation.longitude.toFixed(4)}` : 'GPS Acquired'}
+                  </span>
+                </div>
+                {selectedEscalation.required_resources && selectedEscalation.required_resources.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-400">Needed Units:</span>
+                    {selectedEscalation.required_resources.map(r => (
+                      <span key={r} className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedEscalation.latitude && selectedEscalation.longitude) {
+                    setMapCenter({ lat: selectedEscalation.latitude, lng: selectedEscalation.longitude });
+                  }
+                  setSelectedEscalation(null);
+                  genPlan.mutate();
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Focus Map & Optimize City Fleet</span>
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => resolveEscalationMut.mutate({
+                    reportId: selectedEscalation.id,
+                    notes: 'Operator accepted and dispatched via Command Center'
+                  })}
+                  disabled={resolveEscalationMut.isPending}
+                  className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{resolveEscalationMut.isPending ? 'Resolving...' : 'Resolve Escalation'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedEscalation(null)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

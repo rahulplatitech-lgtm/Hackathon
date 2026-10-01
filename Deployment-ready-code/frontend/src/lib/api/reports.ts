@@ -33,6 +33,29 @@ export interface VoiceChatResponse {
   report_id?: string;
   incident_id?: string;
   extracted_location?: string;
+  ai_confidence?: number;
+  ai_thinking?: string;
+  human_escalation_required?: boolean;
+  escalation_reason?: string;
+  escalated_to_operator?: boolean;
+}
+
+export interface EscalationItem {
+  report_id: string;
+  incident_id?: string;
+  caller_text: string;
+  transcript?: string;
+  ai_confidence: number;
+  ai_thinking: string;
+  incident_type: string;
+  severity: number;
+  urgency: string;
+  location_text: string;
+  reporter_lat?: number;
+  reporter_lng?: number;
+  escalation_reason: string;
+  status: string;
+  created_at: string;
 }
 
 export const sendVoiceAssistantChat = (
@@ -51,3 +74,7 @@ export const sendVoiceAssistantChat = (
     incident_id,
     report_id,
   });
+
+export const getEscalations = () => get<EscalationItem[]>('/api/reports/escalations');
+export const resolveEscalation = (reportId: string) => post<{ status: string; report_id: string }>(`/api/reports/resolve-escalation/${reportId}`);
+

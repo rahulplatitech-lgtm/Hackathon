@@ -67,3 +67,26 @@ class VoiceChatResponse(BaseModel):
     report_id: Optional[str] = None
     incident_id: Optional[str] = None
     extracted_location: Optional[str] = None
+    ai_confidence: float = 0.85
+    ai_thinking: str = ""
+    human_escalation_required: bool = False
+    escalation_reason: Optional[str] = None
+    escalated_to_operator: bool = False
+
+class EscalationItem(BaseModel):
+    report_id: str
+    incident_id: Optional[str] = None
+    caller_text: str
+    transcript: Optional[str] = None
+    ai_confidence: float
+    ai_thinking: str
+    incident_type: str
+    severity: int
+    urgency: str
+    location_text: str
+    reporter_lat: Optional[float] = None
+    reporter_lng: Optional[float] = None
+    escalation_reason: str
+    status: str = "escalated"
+    created_at: datetime
+

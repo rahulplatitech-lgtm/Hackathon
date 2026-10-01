@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Heart, Shield, MapPin, Radio, Phone, Compass, Info, ArrowRight, 
   Plus, Minus, Navigation, Bell, Activity, Truck, Building2, Flame,
-  AlertTriangle, PhoneCall, CheckCircle2, ChevronRight, Sparkles
+  AlertTriangle, PhoneCall, CheckCircle2, ChevronRight, Sparkles, Mic
 } from 'lucide-react';
 import { APIProvider, Map, Marker, Circle, InfoWindow } from '@vis.gl/react-google-maps';
 
@@ -458,16 +458,24 @@ export default function Landing() {
 
             <div className="space-y-3">
               <Link
-                to="/report"
-                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2 transition shadow-md"
+                to="/report?voice=true"
+                className="w-full py-3.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold rounded-2xl text-sm flex items-center justify-center gap-2.5 transition shadow-lg shadow-red-600/30 animate-pulse"
               >
-                <Radio className="w-4 h-4" />
-                <span>Open ChatGPT Emergency Assistant</span>
+                <Mic className="w-5 h-5 text-white" />
+                <span>Start Interactive Voice Bot (ChatGPT Style)</span>
+              </Link>
+
+              <Link
+                to="/report"
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-2xl text-xs flex items-center justify-center gap-2 transition"
+              >
+                <Radio className="w-4 h-4 text-slate-600" />
+                <span>Open Emergency Chatbox (Text & Voice)</span>
               </Link>
 
               <Link
                 to="/passerby"
-                className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-2xl text-sm border border-rose-200 flex items-center justify-center gap-2 transition"
+                className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-2xl text-xs border border-rose-200 flex items-center justify-center gap-2 transition"
               >
                 <Bell className="w-4 h-4" />
                 <span>Broadcast 100m Passerby Alert</span>

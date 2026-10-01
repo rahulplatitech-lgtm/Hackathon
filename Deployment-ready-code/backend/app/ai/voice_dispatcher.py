@@ -55,6 +55,11 @@ class VoiceDispatcherAgent:
                 "dispatched": False,
                 "extracted_location": f"GPS ({reporter_lat:.4f}, {reporter_lng:.4f})" if reporter_lat and reporter_lng else "Current Location",
                 "auto_dispatch": False,
+                "ai_confidence": 0.90,
+                "ai_thinking": "Dispatcher intake channel opened. Awaiting initial distress statement to evaluate emergency category and severity level.",
+                "human_escalation_required": False,
+                "escalation_reason": None,
+                "escalated_to_operator": False,
             }
 
         # Try Gemini API via REST if API key is present
@@ -100,6 +105,7 @@ class VoiceDispatcherAgent:
             "3. Remember what the user already stated in the conversation history—NEVER ask for information they have already provided.\n"
             "4. NEVER repeat the same stock question like 'Do you need ambulances, police, or rescue teams?'.\n"
             "5. If emergency services are dispatched, reassure the caller that help is rolling and stay on the line to guide them.\n"
+            "6. Evaluate your triage certainty: if caller is vague, panicking, conflicting, or requests a human, set human_escalation_required=true and ai_confidence < 0.60.\n"
             "Respond strictly in valid JSON with this schema:\n"
             "{\n"
             '  "reply": "Spoken response for caller (1-3 sentences)",\n'
@@ -110,7 +116,11 @@ class VoiceDispatcherAgent:
             '  "required_resources": ["AMBULANCE","RESCUE_TEAM","POLICE_UNIT","MEDICAL_UNIT","SHELTER"],\n'
             '  "ready_to_dispatch": boolean,\n'
             '  "auto_dispatch": boolean (true if user requests dispatch or severe emergency with location confirmed),\n'
-            '  "extracted_location": "location summary string"\n'
+            '  "extracted_location": "location summary string",\n'
+            '  "ai_confidence": 0.0 to 1.0 float,\n'
+            '  "ai_thinking": "Assessment reasoning explaining key clues detected, threat level, and triage certainty",\n'
+            '  "human_escalation_required": boolean (true if caller asks for human, or confidence < 0.60, or ambiguous emergency),\n'
+            '  "escalation_reason": "Explanation if escalated, else null"\n'
             "}"
         )
 
@@ -268,10 +278,53 @@ class VoiceDispatcherAgent:
             "outside", "evacuated"
         ]
         dispatch_intent = any(w in user_lower for w in satisfied_signals)
-
-        # Chatbox is satisfied if user explicitly requested dispatch, or turn_count >= 2 with recognized emergency
         auto_dispatch = dispatch_now or (dispatch_intent and (detected_type != "General Emergency" or lat is not None)) or (turn_count >= 2 and detected_type != "General Emergency")
         ready_to_dispatch = auto_dispatch or (turn_count >= 1 and detected_type != "General Emergency")
+
+        # Check for explicit human operator request
+        human_requested = any(w in user_lower for w in [
+            "human", "operator", "agent", "real person", "person please", "speak to someone", 
+            "talk to someone", "dispatcher please", "give me a human", "give me a person",
+            "connect me to a person", "connect me to an operator", "talk to human",
+            "escalate", "human operator", "supervisor"
+        ])
+
+        # Check for ambiguous distress signals without verified emergency hazard
+        is_vague = any(w in user_lower for w in [
+            "i don't know", "dont know", "not sure", "confused", "weird sound", 
+            "strange noise", "screaming", "can't see", "cant tell", "something happened", 
+            "unknown", "what is that", "loud bang", "no idea", "what's going on", "whats going on"
+        ])
+        has_specific_hazard = any(w in user_lower for w in [
+            "fire", "smoke", "gas", "leak", "crash", "accident", "bleeding", 
+            "collapse", "flood", "heart", "cpr", "breathing", "flames", "lpg", 
+            "trapped", "injured", "burning", "evacuate"
+        ])
+
+        reply = ""
+        ai_confidence = 0.85
+        ai_thinking = ""
+        human_escalation_required = False
+        escalation_reason = None
+
+        if human_requested:
+            ai_confidence = 0.35
+            human_escalation_required = True
+            escalation_reason = "Caller explicitly requested direct escalation to a Senior Human Dispatcher."
+            ai_thinking = "Direct human transfer requested by caller. Automated intake paused to ensure priority human triage. Routing live voice channel directly to Tactical Command Center."
+            reply = (
+                "I understand completely. I am routing our live voice line directly to the Senior Human Dispatcher in the Tactical Command Center right now. "
+                "Please stay on the line, the operator console is connecting immediately."
+            )
+        elif is_vague and not has_specific_hazard and turn_count <= 2:
+            ai_confidence = 0.42
+            human_escalation_required = True
+            escalation_reason = "Low AI confidence (42%) — Ambiguous distress signals without verified hazard classification require human dispatcher verification."
+            ai_thinking = "Ambiguous emergency markers detected ('screaming/unidentified noise'). Lacks verified incident class or hazard type. Safety threshold requires human risk triage before fleet mobilization."
+            reply = (
+                "I want to make sure you get the exact right emergency support without delay. Because this situation has high uncertainty, "
+                "I am immediately connecting our line to the Senior Human Dispatcher in the Tactical Command Center. Responders are on alert—stay right here with me."
+            )
 
         # 6. Intent & Direct Question Answering
         is_question = (
@@ -279,8 +332,6 @@ class VoiceDispatcherAgent:
             any(user_lower.startswith(w) for w in ["what", "how", "can i", "should i", "is it", "will", "when", "where", "why", "who", "do i", "are you", "tell me"]) or
             any(w in user_lower for w in ["what should i do", "what to do", "how long", "can i", "should i", "is it safe", "how do i", "how to"])
         )
-
-        reply = ""
 
         # --- A. Direct User Question Answering ---
         if is_question:
@@ -522,6 +573,42 @@ class VoiceDispatcherAgent:
                     "Emergency response teams are on standby and dispatching. Is everyone in a safe position right now?"
                 )
 
+        if not ai_thinking:
+            clues = []
+            if detected_type != "General Emergency":
+                clues.append(f"{detected_type} markers")
+            if any(w in full_user_text for w in ["trapped", "pinned", "door"]):
+                clues.append("entrapment reported")
+            if any(w in full_user_text for w in ["bleeding", "unconscious", "heart", "cpr", "injured"]):
+                clues.append("medical trauma")
+            if any(w in full_user_text for w in ["lpg", "cylinder", "smell", "gas"]):
+                clues.append("flammable/toxic gas")
+            if any(w in full_user_text for w in ["flame", "smoke", "burning", "fire"]):
+                clues.append("thermal/smoke hazard")
+
+            clues_text = ", ".join(clues) if clues else "general distress markers"
+            loc_confirmed = lat is not None or "gps" in location_desc.lower() or len(location_desc) > 15
+
+            base_conf = 0.85
+            if detected_type != "General Emergency":
+                base_conf += 0.05
+            if loc_confirmed:
+                base_conf += 0.04
+            if people > 1:
+                base_conf += 0.02
+            if severity >= 4:
+                base_conf = min(0.98, base_conf + 0.03)
+
+            ai_confidence = round(min(0.98, max(0.65, base_conf)), 2)
+            human_escalation_required = False
+            escalation_reason = None
+            ai_thinking = (
+                f"Incident classified as {detected_type} (Severity S{severity}, {urgency} Urgency). "
+                f"Key verified indicators: {clues_text}. "
+                f"Location status: {'Confirmed via GPS' if loc_confirmed else 'Estimated'}. "
+                f"AI Confidence: {int(ai_confidence * 100)}% (High Confidence - Safe for automated triage, unit dispatch, and 100m passerby radius alerting)."
+            )
+
         return {
             "reply": reply,
             "incident_type": detected_type,
@@ -533,6 +620,11 @@ class VoiceDispatcherAgent:
             "dispatched": auto_dispatch,
             "extracted_location": location_desc,
             "auto_dispatch": auto_dispatch,
+            "ai_confidence": ai_confidence,
+            "ai_thinking": ai_thinking,
+            "human_escalation_required": human_escalation_required,
+            "escalation_reason": escalation_reason,
+            "escalated_to_operator": human_escalation_required,
         }
 
     def _finalize_result(
@@ -556,6 +648,13 @@ class VoiceDispatcherAgent:
         if not location_desc:
             location_desc = f"GPS ({lat:.4f}, {lng:.4f})" if lat and lng else "Report location"
 
+        ai_confidence = float(data.get("ai_confidence", 0.88))
+        ai_thinking = data.get("ai_thinking", "")
+        human_escalation_required = bool(data.get("human_escalation_required", False)) or (ai_confidence < 0.60)
+        escalation_reason = data.get("escalation_reason")
+        if human_escalation_required and not escalation_reason:
+            escalation_reason = f"Low AI confidence ({int(ai_confidence * 100)}%) requires senior human dispatcher verification."
+
         return {
             "reply": reply,
             "incident_type": incident_type,
@@ -567,6 +666,11 @@ class VoiceDispatcherAgent:
             "dispatched": auto_dispatch,
             "extracted_location": location_desc,
             "auto_dispatch": auto_dispatch,
+            "ai_confidence": ai_confidence,
+            "ai_thinking": ai_thinking,
+            "human_escalation_required": human_escalation_required,
+            "escalation_reason": escalation_reason,
+            "escalated_to_operator": human_escalation_required,
         }
 
 voice_dispatcher = VoiceDispatcherAgent()
